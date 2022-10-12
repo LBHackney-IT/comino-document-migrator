@@ -1,0 +1,11 @@
+# dependencies
+/node_modules
+
+# editor
+.idea/
+
+# testing
+/coverage
+
+# misc
+.DS_Store
