@@ -6,12 +6,12 @@ export const config = convict({
       url: {
         env: "AZURE_BLOB_STORAGE_URL",
         format: String,
-        default: null,
+        default: "",
       },
       containerName: {
         env: "AZURE_BLOB_STORAGE_CONTAINER_NAME",
         format: String,
-        default: null,
+        default: "",
       },
     },
   },

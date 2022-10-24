@@ -1,21 +1,29 @@
 import { Readable } from "stream";
+import {
+  ContainerClient,
+  ContainerListBlobFlatSegmentResponse,
+} from "@azure/storage-blob";
+
+export interface ObjectListStreamOptions {
+  pageSize?: number;
+}
 
 export class ObjectListStream extends Readable {
-  constructor(containerClient, options) {
-    super();
+  private iterator: AsyncIterableIterator<ContainerListBlobFlatSegmentResponse>;
 
-    this.options = {
-      pageSize: 100,
-      ...options,
-    };
+  private queue: string[] = [];
+  private loading = false;
+  private done = false;
+
+  constructor(
+    containerClient: ContainerClient,
+    options?: ObjectListStreamOptions
+  ) {
+    super();
 
     this.iterator = containerClient
       .listBlobsFlat()
-      .byPage({ maxPageSize: this.options.pageSize });
-
-    this.queue = [];
-    this.loading = false;
-    this.done = false;
+      .byPage({ maxPageSize: options?.pageSize ?? 100 });
   }
 
   _read() {
