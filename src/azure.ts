@@ -61,6 +61,7 @@ export class ObjectListStream extends Readable {
 
     if (res.done) {
       this.done = true;
+      this.loading = false;
 
       return { token: "", count: 0 };
     }
