@@ -4,8 +4,13 @@
   "version": "1.0.0",
   "license": "MIT",
   "private": true,
+  "type": "module",
   "scripts": {
     "lint": "eslint ."
+  },
+  "dependencies": {
+    "@azure/storage-blob": "^12.11.0",
+    "convict": "^6.2.3"
   },
   "devDependencies": {
     "eslint": "^8.25.0",
