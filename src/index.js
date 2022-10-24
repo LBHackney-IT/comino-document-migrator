@@ -1,6 +1,6 @@
 import { BlobServiceClient } from "@azure/storage-blob";
-import { ObjectListStream } from "./azure.js";
-import { config } from "./config.js";
+import { ObjectListStream } from "./azure";
+import { config } from "./config";
 
 const blobServiceClient = new BlobServiceClient(config.azure.blobStorage.url);
 const containerClient = blobServiceClient.getContainerClient(
@@ -8,6 +8,6 @@ const containerClient = blobServiceClient.getContainerClient(
 );
 const objectListStream = new ObjectListStream(containerClient, { pageSize: 3 });
 
-objectListStream.on("data", (results) => {
-  console.log(results.toString());
+objectListStream.on("data", (result) => {
+  console.log(result.toString());
 });

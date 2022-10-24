@@ -4,6 +4,9 @@
 # editor
 .idea/
 
+# build
+/dist
+
 # testing
 /coverage
 
