@@ -4,17 +4,17 @@ import {
   ContainerListBlobFlatSegmentResponse,
 } from "@azure/storage-blob";
 
-export interface ObjectListStreamOptions {
+export interface AzureBlobListStreamOptions {
   pageSize?: number;
 }
 
-export class ObjectListStream extends Readable {
+export class AzureBlobListStream extends Readable {
   private iterator: AsyncIterableIterator<ContainerListBlobFlatSegmentResponse>;
   private queue: string[] = [];
 
   constructor(
     containerClient: ContainerClient,
-    options?: ObjectListStreamOptions
+    options?: AzureBlobListStreamOptions
   ) {
     super();
 

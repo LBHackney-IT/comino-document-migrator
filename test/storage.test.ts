@@ -1,8 +1,8 @@
 import { partial } from "./helpers";
 import { ContainerClient } from "@azure/storage-blob";
-import { ObjectListStream } from "../src/azure";
+import { AzureBlobListStream } from "../src/storage";
 
-describe("ObjectListStream", () => {
+describe("AzureBlobListStream", () => {
   describe("_read", () => {
     test("successfully emits the objects in storage", (done) => {
       const pages = [["1.js", "2.js"], ["3.js", "4.js"], ["5.js"]];
@@ -34,10 +34,10 @@ describe("ObjectListStream", () => {
         }),
       });
 
-      const objectListStream = new ObjectListStream(mockContainerClient);
+      const stream = new AzureBlobListStream(mockContainerClient);
 
       let actual: string[] = [];
-      objectListStream
+      stream
         .on("data", (result) => {
           actual = [...actual, result.toString()];
         })
@@ -65,9 +65,9 @@ describe("ObjectListStream", () => {
         }),
       });
 
-      const objectListStream = new ObjectListStream(mockContainerClient);
+      const stream = new AzureBlobListStream(mockContainerClient);
 
-      objectListStream
+      stream
         .on("data", () => undefined)
         .on("error", (actual) => {
           try {
