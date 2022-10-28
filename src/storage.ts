@@ -1,6 +1,7 @@
 import { Readable, Transform, TransformCallback } from "stream";
 import {
   BlobServiceClient as BlobClient,
+  BlobItem,
   ContainerClient,
   ContainerListBlobFlatSegmentResponse,
 } from "@azure/storage-blob";
@@ -14,14 +15,14 @@ export interface BlobListStreamConfig {
 
 export class BlobListStream extends Readable {
   private iterator: AsyncIterableIterator<ContainerListBlobFlatSegmentResponse>;
-  private queue: string[] = [];
+  private queue: BlobItem[] = [];
 
   constructor({
     blobClient,
     blobContainerName,
     pageSize,
   }: BlobListStreamConfig) {
-    super();
+    super({ objectMode: true });
 
     const containerClient = blobClient.getContainerClient(blobContainerName);
     this.iterator = containerClient
@@ -46,7 +47,7 @@ export class BlobListStream extends Readable {
           return;
         }
 
-        this.queue = res.value.segment.blobItems.map((x) => x.name);
+        this.queue = res.value.segment.blobItems;
 
         const item = this.queue.shift();
         this.push(item);
@@ -73,7 +74,7 @@ export class BlobToS3CopyStream extends Transform {
     s3Client,
     s3BucketName,
   }: BlobToS3CopyStreamConfig) {
-    super();
+    super({ objectMode: true });
 
     this.containerClient = blobClient.getContainerClient(blobContainerName);
     this.s3Client = s3Client;

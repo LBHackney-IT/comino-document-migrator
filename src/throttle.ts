@@ -3,6 +3,7 @@ import { EventEmitter } from "events";
 import { RateLimit } from "async-sema";
 
 export interface ThrottledTransformStreamOptions {
+  objectMode?: boolean;
   queriesPerSecond?: number;
   uniformDistribution?: boolean;
 }
@@ -14,7 +15,7 @@ export class ThrottledTransformStream extends Transform {
   private done?: EventEmitter;
 
   constructor(stream: Transform, options?: ThrottledTransformStreamOptions) {
-    super();
+    super({ objectMode: options?.objectMode ?? false });
 
     this.stream = stream;
     this.limit = RateLimit(options?.queriesPerSecond ?? 100, {

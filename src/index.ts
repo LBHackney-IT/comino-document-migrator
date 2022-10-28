@@ -24,9 +24,10 @@ const blobToS3CopyStream = new BlobToS3CopyStream({
   s3BucketName: config.aws.s3.bucketName,
 });
 const throttledStream = new ThrottledTransformStream(blobToS3CopyStream, {
+  objectMode: true,
   uniformDistribution: true,
 });
 
 blobListStream.pipe(throttledStream).on("data", (result) => {
-  console.log(result.toString());
+  console.log(JSON.stringify(result));
 });

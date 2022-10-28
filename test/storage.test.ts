@@ -6,12 +6,14 @@ describe("BlobListStream", () => {
   describe("_read", () => {
     test("successfully emits the objects in storage", (done) => {
       const containerName = "test";
-      const pages = [["1.js", "2.js"], ["3.js", "4.js"], ["5.js"]];
+      const pages = [["1.js", "2.js"], ["3.js", "4.js"], ["5.js"]].map((page) =>
+        page.map((name) => ({ name }))
+      );
       const results = [
         ...pages.map((page) => ({
           value: {
             segment: {
-              blobItems: page.map((name) => ({ name })),
+              blobItems: page,
             },
           },
         })),
@@ -45,7 +47,7 @@ describe("BlobListStream", () => {
       let actual: string[] = [];
       stream
         .on("data", (result) => {
-          actual = [...actual, result.toString()];
+          actual = [...actual, result];
         })
         .on("end", () => {
           try {
