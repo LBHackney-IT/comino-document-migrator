@@ -1,4 +1,5 @@
 import { Readable, Transform, TransformCallback } from "stream";
+import * as path from "path";
 import {
   BlobServiceClient as BlobClient,
   BlobItem,
@@ -61,29 +62,37 @@ export class BlobListStream extends Readable {
   }
 }
 
+export interface ObjectNameMapper {
+  (name: string): string;
+}
+
 export interface BlobToS3CopyStreamConfig {
   blobClient: BlobClient;
   blobContainerName: string;
   s3Client: S3Client;
   s3BucketName: string;
+  s3ObjectNameMapper?: ObjectNameMapper;
 }
 
 export class BlobToS3CopyStream extends Transform {
   private containerClient: ContainerClient;
   private s3Client: S3Client;
   private s3BucketName: string;
+  private mapS3ObjectName: ObjectNameMapper;
 
   constructor({
     blobClient,
     blobContainerName,
     s3Client,
     s3BucketName,
+    s3ObjectNameMapper,
   }: BlobToS3CopyStreamConfig) {
     super({ objectMode: true });
 
     this.containerClient = blobClient.getContainerClient(blobContainerName);
     this.s3Client = s3Client;
     this.s3BucketName = s3BucketName;
+    this.mapS3ObjectName = s3ObjectNameMapper ?? ((name: string) => name);
   }
 
   _transform(
@@ -91,7 +100,7 @@ export class BlobToS3CopyStream extends Transform {
     _encoding: BufferEncoding,
     callback: TransformCallback
   ): void {
-    const s3ObjectName = blobItem.name; // TODO: Map to new name
+    const s3ObjectName = this.mapS3ObjectName(blobItem.name);
 
     this.copyBlobToS3(blobItem, s3ObjectName)
       .then(() => callback(null))
@@ -102,6 +111,7 @@ export class BlobToS3CopyStream extends Transform {
     blobItem: BlobItem,
     s3ObjectName: string
   ): Promise<void> {
+    console.log(s3ObjectName);
     let headObjectOutput: HeadObjectOutput | undefined;
     try {
       headObjectOutput = await this.s3Client.send(
@@ -135,3 +145,20 @@ export class BlobToS3CopyStream extends Transform {
     await upload.done();
   }
 }
+
+export interface S3ObjectNameMapperConfig {
+  blobPrefix: string;
+  s3Prefix: string;
+}
+
+export const createS3ObjectNameMapper =
+  ({ blobPrefix, s3Prefix }: S3ObjectNameMapperConfig) =>
+  (blobName: string) => {
+    if (!blobName.startsWith(blobPrefix)) {
+      return blobName;
+    }
+
+    const fileName = path.basename(blobName);
+
+    return path.join(s3Prefix, fileName);
+  };

@@ -13,6 +13,16 @@ export const config = convict({
         format: String,
         default: "",
       },
+      prefix: {
+        env: "AZURE_BLOB_PREFIX",
+        format: String,
+        default: "",
+      },
+      pageSize: {
+        env: "AZURE_BLOB_PAGE_SIZE",
+        format: Number,
+        default: 100,
+      },
     },
   },
   aws: {
@@ -39,6 +49,11 @@ export const config = convict({
     s3: {
       bucketName: {
         env: "AWS_S3_BUCKET_NAME",
+        format: String,
+        default: "",
+      },
+      prefix: {
+        env: "AWS_S3_PREFIX",
         format: String,
         default: "",
       },
