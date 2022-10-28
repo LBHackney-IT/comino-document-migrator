@@ -1,23 +1,32 @@
-import { Transform } from "stream";
-import { BlobServiceClient } from "@azure/storage-blob";
+import { BlobServiceClient as BlobClient } from "@azure/storage-blob";
+import { S3Client } from "@aws-sdk/client-s3";
 import { config } from "./config";
-import { AzureBlobListStream } from "./storage";
+import { BlobListStream, BlobToS3CopyStream } from "./storage";
 import { ThrottledTransformStream } from "./throttle";
 
-const blobServiceClient = new BlobServiceClient(config.azure.blobStorage.url);
-const containerClient = blobServiceClient.getContainerClient(
-  config.azure.blobStorage.containerName
-);
-const objectListStream = new AzureBlobListStream(containerClient, {
+const blobClient = new BlobClient(config.azure.blob.url);
+const blobListStream = new BlobListStream({
+  blobClient,
+  blobContainerName: config.azure.blob.containerName,
   pageSize: 3,
 });
-const transform = new Transform({
-  transform: (chunk, _encoding, callback) => callback(null, chunk),
+const s3Client = new S3Client({
+  credentials: {
+    accessKeyId: config.aws.accessKeyId,
+    secretAccessKey: config.aws.secretAccessKey,
+  },
+  region: config.aws.region,
 });
-const throttledStream = new ThrottledTransformStream(transform, {
+const blobToS3CopyStream = new BlobToS3CopyStream({
+  blobClient,
+  blobContainerName: config.azure.blob.containerName,
+  s3Client,
+  s3BucketName: config.aws.s3.bucketName,
+});
+const throttledStream = new ThrottledTransformStream(blobToS3CopyStream, {
   uniformDistribution: true,
 });
 
-objectListStream.pipe(throttledStream).on("data", (result) => {
+blobListStream.pipe(throttledStream).on("data", (result) => {
   console.log(result.toString());
 });

@@ -1,10 +1,11 @@
 import { partial } from "./helpers";
-import { ContainerClient } from "@azure/storage-blob";
-import { AzureBlobListStream } from "../src/storage";
+import { BlobServiceClient as BlobClient } from "@azure/storage-blob";
+import { BlobListStream } from "../src/storage";
 
-describe("AzureBlobListStream", () => {
+describe("BlobListStream", () => {
   describe("_read", () => {
     test("successfully emits the objects in storage", (done) => {
+      const containerName = "test";
       const pages = [["1.js", "2.js"], ["3.js", "4.js"], ["5.js"]];
       const results = [
         ...pages.map((page) => ({
@@ -21,20 +22,25 @@ describe("AzureBlobListStream", () => {
 
       const expected = pages.reduce((acc, page) => [...acc, ...page], []);
 
-      const mockContainerClient = partial<ContainerClient>({
-        listBlobsFlat: () => ({
-          byPage: () => {
-            let index = 0;
-            return {
-              next: () => {
-                return Promise.resolve(results[index++]);
-              },
-            };
-          },
+      const mockBlobClient = partial<BlobClient>({
+        getContainerClient: () => ({
+          listBlobsFlat: () => ({
+            byPage: () => {
+              let index = 0;
+              return {
+                next: () => {
+                  return Promise.resolve(results[index++]);
+                },
+              };
+            },
+          }),
         }),
       });
 
-      const stream = new AzureBlobListStream(mockContainerClient);
+      const stream = new BlobListStream({
+        blobClient: mockBlobClient,
+        blobContainerName: containerName,
+      });
 
       let actual: string[] = [];
       stream
@@ -52,20 +58,26 @@ describe("AzureBlobListStream", () => {
     });
 
     test("successfully emits an error on failure", (done) => {
+      const containerName = "test";
       const errorMessage = "test error";
       const expected = new Error(errorMessage);
 
-      const mockContainerClient = partial<ContainerClient>({
-        listBlobsFlat: () => ({
-          byPage: () => ({
-            next: () => {
-              return Promise.reject(new Error(errorMessage));
-            },
+      const mockBlobClient = partial<BlobClient>({
+        getContainerClient: () => ({
+          listBlobsFlat: () => ({
+            byPage: () => ({
+              next: () => {
+                return Promise.reject(new Error(errorMessage));
+              },
+            }),
           }),
         }),
       });
 
-      const stream = new AzureBlobListStream(mockContainerClient);
+      const stream = new BlobListStream({
+        blobClient: mockBlobClient,
+        blobContainerName: containerName,
+      });
 
       stream
         .on("data", () => undefined)
