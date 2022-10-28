@@ -38,6 +38,4 @@ const throttledStream = new ThrottledTransformStream(blobToS3CopyStream, {
   uniformDistribution: true,
 });
 
-blobListStream.pipe(throttledStream).on("data", (result) => {
-  console.log(JSON.stringify(result));
-});
+blobListStream.pipe(throttledStream);

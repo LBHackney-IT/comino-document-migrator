@@ -111,7 +111,6 @@ export class BlobToS3CopyStream extends Transform {
     blobItem: BlobItem,
     s3ObjectName: string
   ): Promise<void> {
-    console.log(s3ObjectName);
     let headObjectOutput: HeadObjectOutput | undefined;
     try {
       headObjectOutput = await this.s3Client.send(
