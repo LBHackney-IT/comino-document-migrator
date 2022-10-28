@@ -31,7 +31,7 @@ export class ThrottledTransformStream extends Transform {
     this.count++;
 
     this.limit().then(() => {
-      this.stream._transform.call(this, chunk, encoding, (err, res) => {
+      this.stream._transform(chunk, encoding, (err, res) => {
         if (err) {
           this.emit("error", err);
         } else if (res) {
@@ -55,7 +55,7 @@ export class ThrottledTransformStream extends Transform {
         return callback();
       }
 
-      this.stream._flush.call(this, callback);
+      this.stream._flush(callback);
     };
 
     if (!this.count) {

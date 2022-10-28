@@ -2,10 +2,15 @@ import { Readable, Transform, TransformCallback } from "stream";
 import {
   BlobServiceClient as BlobClient,
   BlobItem,
-  ContainerClient,
   ContainerListBlobFlatSegmentResponse,
+  ContainerClient,
 } from "@azure/storage-blob";
-import { S3Client } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  HeadObjectCommand,
+  HeadObjectOutput,
+} from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 
 export interface BlobListStreamConfig {
   blobClient: BlobClient;
@@ -82,10 +87,51 @@ export class BlobToS3CopyStream extends Transform {
   }
 
   _transform(
-    chunk: unknown,
-    encoding: BufferEncoding,
+    blobItem: BlobItem,
+    _encoding: BufferEncoding,
     callback: TransformCallback
   ): void {
-    callback(null, chunk);
+    const s3ObjectName = blobItem.name; // TODO: Map to new name
+
+    this.copyBlobToS3(blobItem, s3ObjectName)
+      .then(() => callback(null))
+      .catch((err) => callback(err));
+  }
+
+  private async copyBlobToS3(
+    blobItem: BlobItem,
+    s3ObjectName: string
+  ): Promise<void> {
+    let headObjectOutput: HeadObjectOutput | undefined;
+    try {
+      headObjectOutput = await this.s3Client.send(
+        new HeadObjectCommand({
+          Bucket: this.s3BucketName,
+          Key: s3ObjectName,
+        })
+      );
+    } catch (err) {
+      if (err instanceof Error && err.name !== "NotFound") {
+        throw err;
+      }
+    }
+
+    if (blobItem.properties.contentLength === headObjectOutput?.ContentLength) {
+      return;
+    }
+
+    const blobItemClient = this.containerClient.getBlobClient(blobItem.name);
+    const blobDownloadResponse = await blobItemClient.download();
+
+    const upload = new Upload({
+      client: this.s3Client,
+      params: {
+        Bucket: this.s3BucketName,
+        Key: s3ObjectName,
+        Body: blobDownloadResponse.readableStreamBody,
+      },
+    });
+
+    await upload.done();
   }
 }

@@ -26,6 +26,11 @@ export const config = convict({
       format: String,
       default: "",
     },
+    sessionToken: {
+      env: "AWS_SESSION_TOKEN",
+      format: String,
+      default: undefined,
+    },
     region: {
       env: "AWS_REGION",
       format: String,
