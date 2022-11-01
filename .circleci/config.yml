@@ -1,0 +1,86 @@
+version: 2.1
+
+parameters:
+  project-name:
+    type: string
+    default: comino-document-migrator
+  working-dir:
+    type: string
+    default: ~/comino-document-migrator
+  npm-cache-version:
+    type: string
+    default: v1
+
+executors:
+  node-defaults:
+    docker:
+      - image: cimg/node:16.17.0
+    working_directory: << pipeline.parameters.working-dir >>
+
+commands:
+  attach-workspace:
+    steps:
+      - attach_workspace:
+          at: << pipeline.parameters.working-dir >>
+
+  setup-remote-docker:
+    steps:
+      - setup_remote_docker:
+          version: 20.10.18
+          docker_layer_caching: true
+
+  install-node-dependencies:
+    steps:
+      - restore_cache:
+          name: Restore node packages
+          key: npm-<< pipeline.parameters.npm-cache-version >>-{{ checksum "package-lock.json" }}
+      - run:
+          name: Install node dependencies
+          command: npm ci
+      - save_cache:
+          name: Save node packages
+          key: npm-<< pipeline.parameters.npm-cache-version >>-{{ checksum "package-lock.json" }}
+          paths: node_modules
+
+jobs:
+  test:
+    executor: node-defaults
+    steps:
+      - checkout
+      - install-node-dependencies
+      - run:
+          name: Run unit tests
+          command: npm run test:ci
+      - store_artifacts:
+          path: /tmp/coverage
+
+  build:
+    executor: node-defaults
+    steps:
+      - setup-remote-docker
+      - checkout
+      - attach-workspace
+      - run:
+          name: Build image
+          command: docker build -t << pipeline.parameters.project-name >> .
+      - run:
+          name: Archive image
+          command: docker save -o image.tar << pipeline.parameters.project-name >>
+      - persist_to_workspace:
+          root: .
+          paths:
+            - image.tar
+
+workflows:
+  version: 2
+  check-and-deploy:
+    jobs:
+      - test
+
+      - build:
+          filters:
+            branches:
+              only:
+                - main
+          requires:
+            - test
