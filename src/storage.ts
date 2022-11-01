@@ -11,6 +11,7 @@ import {
   HeadObjectOutput,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
+import retry from "async-retry";
 
 export interface BlobListStreamConfig {
   blobClient: BlobClient;
@@ -71,6 +72,7 @@ export interface BlobToS3CopyStreamConfig {
   s3Client: S3Client;
   s3BucketName: string;
   s3ObjectNameMapper?: ObjectNameMapper;
+  maxRetries?: number;
 }
 
 export class BlobToS3CopyStream extends Transform {
@@ -78,6 +80,7 @@ export class BlobToS3CopyStream extends Transform {
   private s3Client: S3Client;
   private s3BucketName: string;
   private mapS3ObjectName: ObjectNameMapper;
+  private maxRetries?: number;
 
   constructor({
     blobClient,
@@ -85,6 +88,7 @@ export class BlobToS3CopyStream extends Transform {
     s3Client,
     s3BucketName,
     s3ObjectNameMapper,
+    maxRetries,
   }: BlobToS3CopyStreamConfig) {
     super({ objectMode: true });
 
@@ -92,6 +96,7 @@ export class BlobToS3CopyStream extends Transform {
     this.s3Client = s3Client;
     this.s3BucketName = s3BucketName;
     this.mapS3ObjectName = s3ObjectNameMapper ?? ((name: string) => name);
+    this.maxRetries = maxRetries;
   }
 
   _transform(
@@ -128,18 +133,25 @@ export class BlobToS3CopyStream extends Transform {
       return;
     }
 
-    const blobItemClient = this.containerClient.getBlobClient(blobItem.name);
-    const blobDownloadResponse = await blobItemClient.download();
+    await retry(
+      async () => {
+        const blobItemClient = this.containerClient.getBlobClient(
+          blobItem.name
+        );
+        const blobDownloadResponse = await blobItemClient.download();
 
-    const upload = new Upload({
-      client: this.s3Client,
-      params: {
-        Bucket: this.s3BucketName,
-        Key: s3ObjectName,
-        Body: blobDownloadResponse.readableStreamBody,
+        const upload = new Upload({
+          client: this.s3Client,
+          params: {
+            Bucket: this.s3BucketName,
+            Key: s3ObjectName,
+            Body: blobDownloadResponse.readableStreamBody,
+          },
+        });
+
+        await upload.done();
       },
-    });
-
-    await upload.done();
+      { retries: this.maxRetries }
+    );
   }
 }
