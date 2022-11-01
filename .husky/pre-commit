@@ -1,0 +1,3 @@
+npx --no tsc
+npm run lint -- --fix 
+npx --no pretty-quick --staged
