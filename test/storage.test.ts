@@ -3,11 +3,7 @@ import { BlobServiceClient as BlobClient } from "@azure/storage-blob";
 import { S3Client } from "@aws-sdk/client-s3";
 import * as libStorage from "@aws-sdk/lib-storage";
 import { partial } from "./helpers";
-import {
-  BlobListStream,
-  BlobToS3CopyStream,
-  createS3ObjectNameMapper,
-} from "../src/storage";
+import { BlobListStream, BlobToS3CopyStream } from "../src/storage";
 
 jest.mock("@aws-sdk/lib-storage");
 const mockLibStorage = jest.mocked(libStorage);
@@ -322,36 +318,5 @@ describe("BlobToS3CopyStream", () => {
           }
         });
     });
-  });
-});
-
-describe("createS3ObjectNameMapper", () => {
-  test("successfully creates a mapper that maps a matching blob name", () => {
-    const blobPrefix = "blob-root/";
-    const s3Prefix = "s3-root/";
-    const fileName = "test.txt";
-    const blobName = `${blobPrefix}01/02/${fileName}`;
-
-    const expected = `${s3Prefix}${fileName}`;
-
-    const mapS3ObjectName = createS3ObjectNameMapper({ blobPrefix, s3Prefix });
-
-    const actual = mapS3ObjectName(blobName);
-
-    expect(actual).toEqual(expected);
-  });
-
-  test("successfully creates a mapper that ignores a blob name that doesn't match", () => {
-    const blobPrefix = "blob-root/";
-    const s3Prefix = "s3-root/";
-    const blobName = "other-root/01/02/test.txt";
-
-    const expected = blobName;
-
-    const mapS3ObjectName = createS3ObjectNameMapper({ blobPrefix, s3Prefix });
-
-    const actual = mapS3ObjectName(blobName);
-
-    expect(actual).toEqual(expected);
   });
 });

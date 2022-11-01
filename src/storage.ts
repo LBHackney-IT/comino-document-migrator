@@ -1,5 +1,4 @@
 import { Readable, Transform, TransformCallback } from "stream";
-import * as path from "path";
 import {
   BlobServiceClient as BlobClient,
   BlobItem,
@@ -144,20 +143,3 @@ export class BlobToS3CopyStream extends Transform {
     await upload.done();
   }
 }
-
-export interface S3ObjectNameMapperConfig {
-  blobPrefix: string;
-  s3Prefix: string;
-}
-
-export const createS3ObjectNameMapper =
-  ({ blobPrefix, s3Prefix }: S3ObjectNameMapperConfig) =>
-  (blobName: string) => {
-    if (!blobName.startsWith(blobPrefix)) {
-      return blobName;
-    }
-
-    const fileName = path.basename(blobName);
-
-    return path.join(s3Prefix, fileName);
-  };
