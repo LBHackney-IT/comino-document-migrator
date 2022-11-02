@@ -40,7 +40,8 @@ commands:
       - save_cache:
           name: Save node packages
           key: npm-<< pipeline.parameters.npm-cache-version >>-{{ checksum "package-lock.json" }}
-          paths: node_modules
+          paths:
+            - node_modules
 
 jobs:
   test:
