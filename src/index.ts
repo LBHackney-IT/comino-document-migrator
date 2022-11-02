@@ -29,9 +29,11 @@ const blobToS3CopyStream = new BlobToS3CopyStream({
   s3Client,
   s3BucketName: config.aws.s3.bucketName,
   s3ObjectNameMapper,
+  maxRetries: config.migration.maxRetriesPerDocument,
 });
 const throttledStream = new ThrottledTransformStream(blobToS3CopyStream, {
   objectMode: true,
+  queriesPerSecond: config.migration.maxDocumentsPerSecond,
   uniformDistribution: true,
 });
 

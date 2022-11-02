@@ -59,4 +59,16 @@ export const config = convict({
       },
     },
   },
+  migration: {
+    maxDocumentsPerSecond: {
+      env: "MIGRATION_MAX_DOCUMENTS_PER_SECOND",
+      format: Number,
+      default: 100,
+    },
+    maxRetriesPerDocument: {
+      env: "MIGRATION_MAX_RETRIES_PER_DOCUMENT",
+      format: Number,
+      default: 10,
+    },
+  },
 }).getProperties();
