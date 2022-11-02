@@ -16,6 +16,7 @@ import retry from "async-retry";
 export interface BlobListStreamConfig {
   blobClient: BlobClient;
   blobContainerName: string;
+  blobPrefix?: string;
   pageSize?: number;
 }
 
@@ -26,13 +27,14 @@ export class BlobListStream extends Readable {
   constructor({
     blobClient,
     blobContainerName,
+    blobPrefix,
     pageSize,
   }: BlobListStreamConfig) {
     super({ objectMode: true });
 
     const containerClient = blobClient.getContainerClient(blobContainerName);
     this.iterator = containerClient
-      .listBlobsFlat()
+      .listBlobsFlat({ prefix: blobPrefix })
       .byPage({ maxPageSize: pageSize ?? 100 });
   }
 
@@ -47,7 +49,7 @@ export class BlobListStream extends Readable {
     this.iterator
       .next()
       .then((res) => {
-        if (res.done) {
+        if (res.done || res.value.segment.blobItems.length === 0) {
           this.push(null);
 
           return;

@@ -9,6 +9,7 @@ const blobClient = new BlobClient(config.azure.blob.url);
 const blobListStream = new BlobListStream({
   blobClient,
   blobContainerName: config.azure.blob.containerName,
+  blobPrefix: config.azure.blob.prefix,
   pageSize: config.azure.blob.pageSize,
 });
 const s3Client = new S3Client({
@@ -19,10 +20,7 @@ const s3Client = new S3Client({
   },
   region: config.aws.region,
 });
-const s3ObjectNameMapper = createDocumentNameMapper(
-  config.azure.blob.prefix,
-  config.aws.s3.prefix
-);
+const s3ObjectNameMapper = createDocumentNameMapper(config.aws.s3.prefix);
 const blobToS3CopyStream = new BlobToS3CopyStream({
   blobClient,
   blobContainerName: config.azure.blob.containerName,

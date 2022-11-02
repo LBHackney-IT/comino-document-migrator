@@ -69,6 +69,58 @@ describe("BlobListStream", () => {
         });
     });
 
+    test("successfully handles empty results", (done) => {
+      const containerName = "test";
+      const results = [
+        {
+          value: {
+            segment: {
+              blobItems: [],
+            },
+          },
+        },
+        {
+          done: true,
+        },
+      ];
+
+      const expected: string[] = [];
+
+      const mockBlobClient = partial<BlobClient>({
+        getContainerClient: () => ({
+          listBlobsFlat: () => ({
+            byPage: () => {
+              let index = 0;
+              return {
+                next: () => {
+                  return Promise.resolve(results[index++]);
+                },
+              };
+            },
+          }),
+        }),
+      });
+
+      const stream = new BlobListStream({
+        blobClient: mockBlobClient,
+        blobContainerName: containerName,
+      });
+
+      let actual: string[] = [];
+      stream
+        .on("data", (result) => {
+          actual = [...actual, result];
+        })
+        .on("end", () => {
+          try {
+            expect(actual).toEqual(expected);
+            done();
+          } catch (err) {
+            done(err);
+          }
+        });
+    });
+
     test("successfully emits an error on failure", (done) => {
       const containerName = "test";
 

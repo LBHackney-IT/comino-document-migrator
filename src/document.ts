@@ -1,11 +1,7 @@
 import * as path from "path";
 
 export const createDocumentNameMapper =
-  (blobPrefix: string, s3Prefix: string) => (blobName: string) => {
-    if (!blobName.startsWith(blobPrefix)) {
-      return blobName;
-    }
-
+  (s3Prefix: string) => (blobName: string) => {
     const fileName = path.basename(blobName);
 
     return path.join(s3Prefix, fileName);
