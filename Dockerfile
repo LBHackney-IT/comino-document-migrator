@@ -19,6 +19,6 @@ WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY package*.json ./
 
-RUN npm ci --only=production
+RUN npm ci --omit=dev --ignore-scripts
 
 ENTRYPOINT ["npm", "run", "start"]

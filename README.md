@@ -47,6 +47,12 @@ The following command will build the application:
 npm run build
 ```
 
+The following command will build the Docker image:
+
+```
+docker build -t comino-document-migrator .
+```
+
 ### Run
 
 The following command will run the built application:
