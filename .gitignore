@@ -1,0 +1,15 @@
+# dependencies
+/node_modules
+
+# editor
+.idea/
+.vscode/
+
+# build
+/dist
+
+# testing
+/coverage
+
+# misc
+.DS_Store
