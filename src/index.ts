@@ -1,3 +1,4 @@
+import { pipeline } from "stream";
 import { BlobServiceClient as BlobClient } from "@azure/storage-blob";
 import { S3Client } from "@aws-sdk/client-s3";
 import { config } from "./config";
@@ -35,4 +36,8 @@ const throttledStream = new ThrottledTransformStream(blobToS3CopyStream, {
   uniformDistribution: true,
 });
 
-blobListStream.pipe(throttledStream);
+pipeline(blobListStream, throttledStream, (err) => {
+  if (err) {
+    console.log(err);
+  }
+});
