@@ -8,6 +8,11 @@ export const config = convict({
         format: String,
         default: "",
       },
+      sasToken: {
+        env: "AZURE_BLOB_SAS_TOKEN",
+        format: String,
+        default: undefined,
+      },
       containerName: {
         env: "AZURE_BLOB_CONTAINER_NAME",
         format: String,
