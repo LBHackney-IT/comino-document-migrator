@@ -6,9 +6,7 @@ import { BlobListStream, BlobToS3CopyStream } from "./storage";
 import { createDocumentNameMapper } from "./document";
 import { ThrottledTransformStream } from "./throttle";
 
-const blobUrl = `${config.azure.blob.url}${
-  config.azure.blob.sasToken ? `?${config.azure.blob.sasToken}` : ""
-}`;
+const blobUrl = `${config.azure.blob.url}?${config.azure.blob.sasToken}`;
 const blobClient = new BlobClient(blobUrl);
 const blobListStream = new BlobListStream({
   blobClient,
