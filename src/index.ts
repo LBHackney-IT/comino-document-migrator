@@ -17,11 +17,6 @@ const blobListStream = new BlobListStream({
   pageSize: config.azure.blob.pageSize,
 });
 const s3Client = new S3Client({
-  credentials: {
-    accessKeyId: config.aws.accessKeyId,
-    secretAccessKey: config.aws.secretAccessKey,
-    sessionToken: config.aws.sessionToken,
-  },
   region: config.aws.region,
 });
 const s3ObjectNameMapper = createDocumentNameMapper(config.aws.s3.prefix);
