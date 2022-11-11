@@ -11,6 +11,10 @@ parameters:
     type: string
     default: v1
 
+orbs:
+  aws-cli: circleci/aws-cli@3.1.3
+  aws_assume_role: lbh-hackit/aws_assume_role@0.1.0
+
 executors:
   node-defaults:
     docker:
@@ -43,8 +47,40 @@ commands:
           paths:
             - node_modules
 
+  deploy-image:
+    parameters:
+      aws-account-id:
+        type: string
+      aws-region:
+        type: string
+    steps:
+      - setup-remote-docker
+      - aws-cli/install
+      - checkout
+      - attach-workspace
+      - aws_assume_role/assume_role:
+          account: << parameters.aws-account-id >>
+          profile_name: default
+          role: "LBH_Circle_CI_Deployment_Role"
+      - run:
+          name: Login Docker
+          command: aws ecr get-login-password --region << parameters.aws-region >> | docker login --username AWS --password-stdin << parameters.aws-account-id >>.dkr.ecr.<< parameters.aws-region >>.amazonaws.com
+      - run:
+          name: Load image
+          command: docker load --input image.tar
+      - run:
+          name: Tag image
+          command: |
+            docker tag << pipeline.parameters.project-name >> << parameters.aws-account-id >>.dkr.ecr.<< parameters.aws-region >>.amazonaws.com/<< pipeline.parameters.project-name >>:latest
+            docker tag << pipeline.parameters.project-name >> << parameters.aws-account-id >>.dkr.ecr.<< parameters.aws-region >>.amazonaws.com/<< pipeline.parameters.project-name >>:<< pipeline.git.revision >>
+      - run:
+          name: Deploy image
+          command: |
+            docker push << parameters.aws-account-id >>.dkr.ecr.<< parameters.aws-region >>.amazonaws.com/<< pipeline.parameters.project-name >>:latest
+            docker push << parameters.aws-account-id >>.dkr.ecr.<< parameters.aws-region >>.amazonaws.com/<< pipeline.parameters.project-name >>:<< pipeline.git.revision >>
+
 jobs:
-  test:
+  unit-test:
     executor: node-defaults
     steps:
       - checkout
@@ -55,7 +91,7 @@ jobs:
       - store_artifacts:
           path: /tmp/coverage
 
-  build:
+  build-image:
     executor: node-defaults
     steps:
       - setup-remote-docker
@@ -72,16 +108,57 @@ jobs:
           paths:
             - image.tar
 
+  deploy-image-staging:
+    executor: node-defaults
+    steps:
+      - deploy-image:
+          aws-account-id: $AWS_ACCOUNT_STAGING
+          aws-region: $AWS_REGION
+
+  deploy-image-production:
+    executor: node-defaults
+    steps:
+      - deploy-image:
+          aws-account-id: $AWS_ACCOUNT_PRODUCTION
+          aws-region: $AWS_REGION
+
 workflows:
   version: 2
   check-and-deploy:
     jobs:
-      - test
+      - unit-test
 
-      - build:
+      - build-image:
           filters:
             branches:
               only:
                 - main
           requires:
-            - test
+            - unit-test
+
+      - deploy-image-staging:
+          context: api-assume-role-document-evidence-store-staging-context
+          filters:
+            branches:
+              only:
+                - main
+          requires:
+            - build-image
+
+      - approve-deploy-production:
+          type: approval
+          filters:
+            branches:
+              only:
+                - main
+          requires:
+            - deploy-image-staging
+
+      - deploy-image-production:
+          context: api-assume-role-document-evidence-store-production-context
+          filters:
+            branches:
+              only:
+                - main
+          requires:
+            - approve-deploy-production
