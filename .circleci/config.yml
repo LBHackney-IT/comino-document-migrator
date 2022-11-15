@@ -12,7 +12,7 @@ parameters:
     default: v1
 
 orbs:
-  aws-cli: circleci/aws-cli@3.1.3
+  # aws-cli: circleci/aws-cli@3.1.3
   aws_assume_role: lbh-hackit/aws_assume_role@0.1.0
 
 executors:
@@ -59,7 +59,7 @@ commands:
         type: string
     steps:
       - setup-remote-docker
-      - aws-cli/install
+      # - aws-cli/install
       - checkout
       - attach-workspace
       - aws_assume_role/assume_role:
