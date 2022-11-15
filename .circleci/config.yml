@@ -129,19 +129,19 @@ workflows:
       - unit-test
 
       - build-image:
-          filters:
-            branches:
-              only:
-                - main
+          # filters:
+          #   branches:
+          #     only:
+          #       - main
           requires:
             - unit-test
 
       - deploy-image-staging:
           context: api-assume-role-document-evidence-store-staging-context
-          filters:
-            branches:
-              only:
-                - main
+          # filters:
+          #   branches:
+          #     only:
+          #       - main
           requires:
             - build-image
 
