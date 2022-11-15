@@ -68,7 +68,7 @@ commands:
           role: "LBH_Circle_CI_Deployment_Role"
       - run:
           name: Login Docker
-          command: aws ecr get-login-password --region << parameters.aws-region >> | docker login --username AWS --password-stdin << parameters.aws-account-id >>.dkr.ecr.<< parameters.aws-region >>.amazonaws.com
+          command: aws ecr get-login-password --region << parameters.aws-region >> --profile default | docker login --username AWS --password-stdin << parameters.aws-account-id >>.dkr.ecr.<< parameters.aws-region >>.amazonaws.com
       - run:
           name: Load image
           command: docker load --input image.tar
