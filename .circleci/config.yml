@@ -20,6 +20,10 @@ executors:
     docker:
       - image: cimg/node:16.17.0
     working_directory: << pipeline.parameters.working-dir >>
+  python-defaults:
+    docker:
+      - image: cimg/python:3.11.0
+    working_directory: << pipeline.parameters.working-dir >>
 
 commands:
   attach-workspace:
@@ -109,14 +113,14 @@ jobs:
             - image.tar
 
   deploy-image-staging:
-    executor: node-defaults
+    executor: python-defaults
     steps:
       - deploy-image:
           aws-account-id: $AWS_ACCOUNT_STAGING
           aws-region: $AWS_REGION
 
   deploy-image-production:
-    executor: node-defaults
+    executor: python-defaults
     steps:
       - deploy-image:
           aws-account-id: $AWS_ACCOUNT_PRODUCTION
