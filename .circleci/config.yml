@@ -11,10 +11,17 @@ parameters:
     type: string
     default: v1
 
+orbs:
+  aws_assume_role: lbh-hackit/aws_assume_role@0.1.0
+
 executors:
   node-defaults:
     docker:
       - image: cimg/node:16.17.0
+    working_directory: << pipeline.parameters.working-dir >>
+  python-defaults:
+    docker:
+      - image: cimg/python:3.11.0
     working_directory: << pipeline.parameters.working-dir >>
 
 commands:
@@ -43,8 +50,41 @@ commands:
           paths:
             - node_modules
 
+  deploy-image:
+    parameters:
+      aws-account-id:
+        type: string
+      aws-region:
+        type: string
+      environment:
+        type: string
+    steps:
+      - setup-remote-docker
+      - checkout
+      - attach-workspace
+      - aws_assume_role/assume_role:
+          account: << parameters.aws-account-id >>
+          profile_name: default
+          role: LBH_Circle_CI_Deployment_Role
+      - run:
+          name: Login Docker
+          command: aws ecr get-login-password --region << parameters.aws-region >> --profile default | docker login --username AWS --password-stdin << parameters.aws-account-id >>.dkr.ecr.<< parameters.aws-region >>.amazonaws.com
+      - run:
+          name: Load image
+          command: docker load --input image.tar
+      - run:
+          name: Tag image
+          command: |
+            docker tag << pipeline.parameters.project-name >> << parameters.aws-account-id >>.dkr.ecr.<< parameters.aws-region >>.amazonaws.com/<< pipeline.parameters.project-name >>-<< parameters.environment >>:latest
+            docker tag << pipeline.parameters.project-name >> << parameters.aws-account-id >>.dkr.ecr.<< parameters.aws-region >>.amazonaws.com/<< pipeline.parameters.project-name >>-<< parameters.environment >>:<< pipeline.git.revision >>
+      - run:
+          name: Deploy image
+          command: |
+            docker push << parameters.aws-account-id >>.dkr.ecr.<< parameters.aws-region >>.amazonaws.com/<< pipeline.parameters.project-name >>-<< parameters.environment >>:latest
+            docker push << parameters.aws-account-id >>.dkr.ecr.<< parameters.aws-region >>.amazonaws.com/<< pipeline.parameters.project-name >>-<< parameters.environment >>:<< pipeline.git.revision >>
+
 jobs:
-  test:
+  unit-test:
     executor: node-defaults
     steps:
       - checkout
@@ -55,7 +95,7 @@ jobs:
       - store_artifacts:
           path: /tmp/coverage
 
-  build:
+  build-image:
     executor: node-defaults
     steps:
       - setup-remote-docker
@@ -72,16 +112,59 @@ jobs:
           paths:
             - image.tar
 
+  deploy-image-staging:
+    executor: python-defaults
+    steps:
+      - deploy-image:
+          aws-account-id: $AWS_ACCOUNT_STAGING
+          aws-region: $AWS_REGION
+          environment: stg
+
+  deploy-image-production:
+    executor: python-defaults
+    steps:
+      - deploy-image:
+          aws-account-id: $AWS_ACCOUNT_PRODUCTION
+          aws-region: $AWS_REGION
+          environment: prod
+
 workflows:
   version: 2
   check-and-deploy:
     jobs:
-      - test
+      - unit-test
 
-      - build:
+      - build-image:
           filters:
             branches:
               only:
                 - main
           requires:
-            - test
+            - unit-test
+
+      - deploy-image-staging:
+          context: api-assume-role-document-evidence-store-staging-context
+          filters:
+            branches:
+              only:
+                - main
+          requires:
+            - build-image
+
+      - approve-deploy-production:
+          type: approval
+          filters:
+            branches:
+              only:
+                - main
+          requires:
+            - deploy-image-staging
+
+      - deploy-image-production:
+          context: api-assume-role-document-evidence-store-production-context
+          filters:
+            branches:
+              only:
+                - main
+          requires:
+            - approve-deploy-production

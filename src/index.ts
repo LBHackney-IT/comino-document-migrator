@@ -6,7 +6,8 @@ import { BlobListStream, BlobToS3CopyStream } from "./storage";
 import { createDocumentNameMapper } from "./document";
 import { ThrottledTransformStream } from "./throttle";
 
-const blobClient = new BlobClient(config.azure.blob.url);
+const blobUrl = `${config.azure.blob.url}?${config.azure.blob.sasToken}`;
+const blobClient = new BlobClient(blobUrl);
 const blobListStream = new BlobListStream({
   blobClient,
   blobContainerName: config.azure.blob.containerName,
@@ -14,11 +15,6 @@ const blobListStream = new BlobListStream({
   pageSize: config.azure.blob.pageSize,
 });
 const s3Client = new S3Client({
-  credentials: {
-    accessKeyId: config.aws.accessKeyId,
-    secretAccessKey: config.aws.secretAccessKey,
-    sessionToken: config.aws.sessionToken,
-  },
   region: config.aws.region,
 });
 const s3ObjectNameMapper = createDocumentNameMapper(config.aws.s3.prefix);

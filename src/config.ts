@@ -8,6 +8,11 @@ export const config = convict({
         format: String,
         default: "",
       },
+      sasToken: {
+        env: "AZURE_BLOB_SAS_TOKEN",
+        format: String,
+        default: "",
+      },
       containerName: {
         env: "AZURE_BLOB_CONTAINER_NAME",
         format: String,
@@ -26,21 +31,6 @@ export const config = convict({
     },
   },
   aws: {
-    accessKeyId: {
-      env: "AWS_ACCESS_KEY_ID",
-      format: String,
-      default: "",
-    },
-    secretAccessKey: {
-      env: "AWS_SECRET_ACCESS_KEY",
-      format: String,
-      default: "",
-    },
-    sessionToken: {
-      env: "AWS_SESSION_TOKEN",
-      format: String,
-      default: undefined,
-    },
     region: {
       env: "AWS_REGION",
       format: String,

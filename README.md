@@ -15,7 +15,8 @@ A worker that migrates files from Civica's Azure Blob storage to an AWS S3 bucke
 
 The following environment variables are required in order to run the application:
 
-- `AZURE_BLOB_URL` - The Azure Blob storage container URL including the [SAS token](https://learn.microsoft.com/en-us/azure/cognitive-services/translator/document-translation/create-sas-tokens?tabs=Containers)
+- `AZURE_BLOB_URL` - The Azure Blob storage container URL
+- `AZURE_BLOB_SAS_TOKEN` - The Azure Blob storage container [SAS token](https://learn.microsoft.com/en-us/azure/cognitive-services/translator/document-translation/create-sas-tokens?tabs=Containers)
 - `AZURE_BLOB_CONTAINER_NAME` - The Azure Blob storage container name
 - `AWS_ACCESS_KEY_ID` - The AWS Access Key ID used for accessing the S3 bucket
 - `AWS_SECRET_ACCESS_KEY` - The AWS Secret Access Key used for accessing the S3 bucket
