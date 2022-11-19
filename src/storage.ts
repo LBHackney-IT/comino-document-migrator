@@ -69,40 +69,30 @@ export interface ObjectNameMapper {
   (name: string): string;
 }
 
-export interface BlobToS3CopyStreamConfig {
-  blobClient: BlobClient;
-  blobContainerName: string;
+export interface BlobFilterStreamConfig {
   s3Client: S3Client;
   s3BucketName: string;
-  s3ObjectNameMapper?: ObjectNameMapper;
-  maxRetries?: number;
+  s3ObjectNameMapper: ObjectNameMapper;
   logger: Logger;
 }
 
-export class BlobToS3CopyStream extends Transform {
-  private containerClient: ContainerClient;
+export class BlobFilterStream extends Transform {
   private s3Client: S3Client;
   private s3BucketName: string;
   private mapS3ObjectName: ObjectNameMapper;
-  private maxRetries?: number;
   private logger: Logger;
 
   constructor({
-    blobClient,
-    blobContainerName,
     s3Client,
     s3BucketName,
     s3ObjectNameMapper,
-    maxRetries,
     logger,
-  }: BlobToS3CopyStreamConfig) {
+  }: BlobFilterStreamConfig) {
     super({ objectMode: true });
 
-    this.containerClient = blobClient.getContainerClient(blobContainerName);
     this.s3Client = s3Client;
     this.s3BucketName = s3BucketName;
-    this.mapS3ObjectName = s3ObjectNameMapper ?? ((name: string) => name);
-    this.maxRetries = maxRetries;
+    this.mapS3ObjectName = s3ObjectNameMapper;
     this.logger = logger;
   }
 
@@ -113,15 +103,15 @@ export class BlobToS3CopyStream extends Transform {
   ): void {
     const s3ObjectName = this.mapS3ObjectName(blobItem.name);
 
-    this.copyBlobToS3(blobItem, s3ObjectName)
-      .then(() => callback(null))
+    this.filterBlob(blobItem, s3ObjectName)
+      .then((res) => callback(null, res))
       .catch((err) => callback(err));
   }
 
-  private async copyBlobToS3(
+  private async filterBlob(
     blobItem: BlobItem,
     s3ObjectName: string
-  ): Promise<void> {
+  ): Promise<BlobItem | undefined> {
     let headObjectOutput: HeadObjectOutput | undefined;
     try {
       headObjectOutput = await this.s3Client.send(
@@ -153,6 +143,59 @@ export class BlobToS3CopyStream extends Transform {
       });
     }
 
+    return blobItem;
+  }
+}
+
+export interface BlobToS3CopyStreamConfig {
+  blobClient: BlobClient;
+  blobContainerName: string;
+  s3Client: S3Client;
+  s3BucketName: string;
+  s3ObjectNameMapper: ObjectNameMapper;
+  maxRetries?: number;
+}
+
+export class BlobToS3CopyStream extends Transform {
+  private containerClient: ContainerClient;
+  private s3Client: S3Client;
+  private s3BucketName: string;
+  private mapS3ObjectName: ObjectNameMapper;
+  private maxRetries?: number;
+
+  constructor({
+    blobClient,
+    blobContainerName,
+    s3Client,
+    s3BucketName,
+    s3ObjectNameMapper,
+    maxRetries,
+  }: BlobToS3CopyStreamConfig) {
+    super({ objectMode: true });
+
+    this.containerClient = blobClient.getContainerClient(blobContainerName);
+    this.s3Client = s3Client;
+    this.s3BucketName = s3BucketName;
+    this.mapS3ObjectName = s3ObjectNameMapper;
+    this.maxRetries = maxRetries;
+  }
+
+  _transform(
+    blobItem: BlobItem,
+    _encoding: BufferEncoding,
+    callback: TransformCallback
+  ): void {
+    const s3ObjectName = this.mapS3ObjectName(blobItem.name);
+
+    this.copyBlobToS3(blobItem, s3ObjectName)
+      .then(() => callback(null))
+      .catch((err) => callback(err));
+  }
+
+  private async copyBlobToS3(
+    blobItem: BlobItem,
+    s3ObjectName: string
+  ): Promise<void> {
     await retry(
       async () => {
         const blobItemClient = this.containerClient.getBlobClient(

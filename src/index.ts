@@ -3,7 +3,11 @@ import { BlobServiceClient as BlobClient } from "@azure/storage-blob";
 import { S3Client } from "@aws-sdk/client-s3";
 import { config } from "./config";
 import { createLogger } from "./log";
-import { BlobListStream, BlobToS3CopyStream } from "./storage";
+import {
+  BlobListStream,
+  BlobFilterStream,
+  BlobToS3CopyStream,
+} from "./storage";
 import { createDocumentNameMapper } from "./document";
 import { ThrottledTransformStream } from "./throttle";
 
@@ -20,6 +24,12 @@ const s3Client = new S3Client({
   region: config.aws.region,
 });
 const s3ObjectNameMapper = createDocumentNameMapper(config.aws.s3.prefix);
+const blobFilterStream = new BlobFilterStream({
+  s3Client,
+  s3BucketName: config.aws.s3.bucketName,
+  s3ObjectNameMapper,
+  logger,
+});
 const blobToS3CopyStream = new BlobToS3CopyStream({
   blobClient,
   blobContainerName: config.azure.blob.containerName,
@@ -27,7 +37,6 @@ const blobToS3CopyStream = new BlobToS3CopyStream({
   s3BucketName: config.aws.s3.bucketName,
   s3ObjectNameMapper,
   maxRetries: config.migration.maxRetriesPerDocument,
-  logger,
 });
 const throttledCopyStream = new ThrottledTransformStream(blobToS3CopyStream, {
   objectMode: true,
@@ -35,7 +44,7 @@ const throttledCopyStream = new ThrottledTransformStream(blobToS3CopyStream, {
   uniformDistribution: true,
 });
 
-pipeline(blobListStream, throttledCopyStream, (err) => {
+pipeline(blobListStream, blobFilterStream, throttledCopyStream, (err) => {
   if (err) {
     logger.error(err);
   }

@@ -13,6 +13,8 @@ const mockLogger = partial<Logger>({
   info: jest.fn(),
 });
 
+const mockS3ObjectNameMapper = jest.fn((name: string) => name);
+
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -214,7 +216,7 @@ describe("BlobToS3CopyStream", () => {
         blobContainerName,
         s3Client: mockS3Client,
         s3BucketName,
-        logger: mockLogger,
+        s3ObjectNameMapper: mockS3ObjectNameMapper,
       });
 
       inputStream
@@ -277,7 +279,7 @@ describe("BlobToS3CopyStream", () => {
         blobContainerName,
         s3Client: mockS3Client,
         s3BucketName,
-        logger: mockLogger,
+        s3ObjectNameMapper: mockS3ObjectNameMapper,
       });
 
       inputStream
@@ -323,7 +325,7 @@ describe("BlobToS3CopyStream", () => {
         blobContainerName,
         s3Client: mockS3Client,
         s3BucketName,
-        logger: mockLogger,
+        s3ObjectNameMapper: mockS3ObjectNameMapper,
       });
 
       inputStream
@@ -364,7 +366,7 @@ describe("BlobToS3CopyStream", () => {
         blobContainerName,
         s3Client: mockS3Client,
         s3BucketName,
-        logger: mockLogger,
+        s3ObjectNameMapper: mockS3ObjectNameMapper,
       });
 
       inputStream
