@@ -101,17 +101,14 @@ export class BlobFilterStream extends Transform {
     _encoding: BufferEncoding,
     callback: TransformCallback
   ): void {
-    const s3ObjectName = this.mapS3ObjectName(blobItem.name);
-
-    this.filterBlob(blobItem, s3ObjectName)
+    this.filterBlob(blobItem)
       .then((res) => callback(null, res))
       .catch((err) => callback(err));
   }
 
-  private async filterBlob(
-    blobItem: BlobItem,
-    s3ObjectName: string
-  ): Promise<BlobItem | undefined> {
+  private async filterBlob(blobItem: BlobItem): Promise<BlobItem | undefined> {
+    const s3ObjectName = this.mapS3ObjectName(blobItem.name);
+
     let headObjectOutput: HeadObjectOutput | undefined;
     try {
       headObjectOutput = await this.s3Client.send(
@@ -177,7 +174,7 @@ export class BlobToS3CopyStream extends Transform {
     this.s3Client = s3Client;
     this.s3BucketName = s3BucketName;
     this.mapS3ObjectName = s3ObjectNameMapper;
-    this.maxRetries = maxRetries;
+    this.maxRetries = maxRetries ?? 10;
   }
 
   _transform(
@@ -185,18 +182,13 @@ export class BlobToS3CopyStream extends Transform {
     _encoding: BufferEncoding,
     callback: TransformCallback
   ): void {
-    const s3ObjectName = this.mapS3ObjectName(blobItem.name);
-
-    this.copyBlobToS3(blobItem, s3ObjectName)
+    this.copyBlobToS3(blobItem)
       .then(() => callback(null))
       .catch((err) => callback(err));
   }
 
-  private async copyBlobToS3(
-    blobItem: BlobItem,
-    s3ObjectName: string
-  ): Promise<void> {
-    await retry(
+  private copyBlobToS3(blobItem: BlobItem): Promise<void> {
+    return retry(
       async () => {
         const blobItemClient = this.containerClient.getBlobClient(
           blobItem.name
@@ -207,7 +199,7 @@ export class BlobToS3CopyStream extends Transform {
           client: this.s3Client,
           params: {
             Bucket: this.s3BucketName,
-            Key: s3ObjectName,
+            Key: this.mapS3ObjectName(blobItem.name),
             Body: blobDownloadResponse.readableStreamBody,
           },
         });
