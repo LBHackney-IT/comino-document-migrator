@@ -4,9 +4,14 @@ import { S3Client } from "@aws-sdk/client-s3";
 import * as libStorage from "@aws-sdk/lib-storage";
 import { partial } from "./helpers";
 import { BlobListStream, BlobToS3CopyStream } from "../src/storage";
+import { Logger } from "../src/log";
 
 jest.mock("@aws-sdk/lib-storage");
 const mockLibStorage = jest.mocked(libStorage);
+
+const mockLogger = partial<Logger>({
+  info: jest.fn(),
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -209,6 +214,7 @@ describe("BlobToS3CopyStream", () => {
         blobContainerName,
         s3Client: mockS3Client,
         s3BucketName,
+        logger: mockLogger,
       });
 
       inputStream
@@ -271,6 +277,7 @@ describe("BlobToS3CopyStream", () => {
         blobContainerName,
         s3Client: mockS3Client,
         s3BucketName,
+        logger: mockLogger,
       });
 
       inputStream
@@ -316,6 +323,7 @@ describe("BlobToS3CopyStream", () => {
         blobContainerName,
         s3Client: mockS3Client,
         s3BucketName,
+        logger: mockLogger,
       });
 
       inputStream
@@ -356,6 +364,7 @@ describe("BlobToS3CopyStream", () => {
         blobContainerName,
         s3Client: mockS3Client,
         s3BucketName,
+        logger: mockLogger,
       });
 
       inputStream

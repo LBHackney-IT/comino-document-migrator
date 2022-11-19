@@ -12,6 +12,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import retry from "async-retry";
+import { Logger } from "./log";
 
 export interface BlobListStreamConfig {
   blobClient: BlobClient;
@@ -75,6 +76,7 @@ export interface BlobToS3CopyStreamConfig {
   s3BucketName: string;
   s3ObjectNameMapper?: ObjectNameMapper;
   maxRetries?: number;
+  logger: Logger;
 }
 
 export class BlobToS3CopyStream extends Transform {
@@ -83,6 +85,7 @@ export class BlobToS3CopyStream extends Transform {
   private s3BucketName: string;
   private mapS3ObjectName: ObjectNameMapper;
   private maxRetries?: number;
+  private logger: Logger;
 
   constructor({
     blobClient,
@@ -91,6 +94,7 @@ export class BlobToS3CopyStream extends Transform {
     s3BucketName,
     s3ObjectNameMapper,
     maxRetries,
+    logger,
   }: BlobToS3CopyStreamConfig) {
     super({ objectMode: true });
 
@@ -99,6 +103,7 @@ export class BlobToS3CopyStream extends Transform {
     this.s3BucketName = s3BucketName;
     this.mapS3ObjectName = s3ObjectNameMapper ?? ((name: string) => name);
     this.maxRetries = maxRetries;
+    this.logger = logger;
   }
 
   _transform(
@@ -133,6 +138,19 @@ export class BlobToS3CopyStream extends Transform {
 
     if (blobItem.properties.contentLength === headObjectOutput?.ContentLength) {
       return;
+    }
+
+    if (headObjectOutput?.ContentLength) {
+      this.logger.info("Existing S3 object is being updated", {
+        azureBlob: {
+          name: blobItem.name,
+          contentLength: blobItem.properties.contentLength,
+        },
+        s3Object: {
+          name: s3ObjectName,
+          contentLength: headObjectOutput.ContentLength,
+        },
+      });
     }
 
     await retry(
