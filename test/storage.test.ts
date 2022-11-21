@@ -239,8 +239,9 @@ describe("BlobFilterStream", () => {
 
       const mockS3ObjectNameMapper = (name: string) => name;
 
+      const mockLoggerInfo = jest.fn();
       const mockLogger = partial<Logger>({
-        info: () => undefined,
+        info: mockLoggerInfo,
       });
 
       const stream = new BlobFilterStream({
@@ -258,6 +259,7 @@ describe("BlobFilterStream", () => {
         })
         .on("end", () => {
           try {
+            expect(mockLoggerInfo).toBeCalled();
             expect(actual).toEqual(expected);
             done();
           } catch (err) {
