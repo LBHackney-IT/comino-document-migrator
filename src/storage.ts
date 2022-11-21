@@ -12,6 +12,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import retry from "async-retry";
+import { Logger } from "./log";
 
 export interface BlobListStreamConfig {
   blobClient: BlobClient;
@@ -68,12 +69,87 @@ export interface ObjectNameMapper {
   (name: string): string;
 }
 
+export interface BlobFilterStreamConfig {
+  s3Client: S3Client;
+  s3BucketName: string;
+  s3ObjectNameMapper: ObjectNameMapper;
+  logger: Logger;
+}
+
+export class BlobFilterStream extends Transform {
+  private s3Client: S3Client;
+  private s3BucketName: string;
+  private mapS3ObjectName: ObjectNameMapper;
+  private logger: Logger;
+
+  constructor({
+    s3Client,
+    s3BucketName,
+    s3ObjectNameMapper,
+    logger,
+  }: BlobFilterStreamConfig) {
+    super({ objectMode: true });
+
+    this.s3Client = s3Client;
+    this.s3BucketName = s3BucketName;
+    this.mapS3ObjectName = s3ObjectNameMapper;
+    this.logger = logger;
+  }
+
+  _transform(
+    blobItem: BlobItem,
+    _encoding: BufferEncoding,
+    callback: TransformCallback
+  ): void {
+    this.filterBlob(blobItem)
+      .then((res) => callback(null, res))
+      .catch((err) => callback(err));
+  }
+
+  private async filterBlob(blobItem: BlobItem): Promise<BlobItem | undefined> {
+    const s3ObjectName = this.mapS3ObjectName(blobItem.name);
+
+    let headObjectOutput: HeadObjectOutput | undefined;
+    try {
+      headObjectOutput = await this.s3Client.send(
+        new HeadObjectCommand({
+          Bucket: this.s3BucketName,
+          Key: s3ObjectName,
+        })
+      );
+    } catch (err) {
+      if (err instanceof Error && err.name !== "NotFound") {
+        throw err;
+      }
+    }
+
+    if (blobItem.properties.contentLength === headObjectOutput?.ContentLength) {
+      return;
+    }
+
+    if (headObjectOutput?.ContentLength) {
+      this.logger.info("Existing S3 object is being updated", {
+        azureBlob: {
+          name: blobItem.name,
+          contentLength: blobItem.properties.contentLength,
+        },
+        s3Object: {
+          name: s3ObjectName,
+          contentLength: headObjectOutput.ContentLength,
+        },
+      });
+    }
+
+    return blobItem;
+  }
+}
+
 export interface BlobToS3CopyStreamConfig {
   blobClient: BlobClient;
   blobContainerName: string;
   s3Client: S3Client;
   s3BucketName: string;
-  s3ObjectNameMapper?: ObjectNameMapper;
+  s3ObjectNameMapper: ObjectNameMapper;
   maxRetries?: number;
 }
 
@@ -97,8 +173,8 @@ export class BlobToS3CopyStream extends Transform {
     this.containerClient = blobClient.getContainerClient(blobContainerName);
     this.s3Client = s3Client;
     this.s3BucketName = s3BucketName;
-    this.mapS3ObjectName = s3ObjectNameMapper ?? ((name: string) => name);
-    this.maxRetries = maxRetries;
+    this.mapS3ObjectName = s3ObjectNameMapper;
+    this.maxRetries = maxRetries ?? 10;
   }
 
   _transform(
@@ -106,36 +182,13 @@ export class BlobToS3CopyStream extends Transform {
     _encoding: BufferEncoding,
     callback: TransformCallback
   ): void {
-    const s3ObjectName = this.mapS3ObjectName(blobItem.name);
-
-    this.copyBlobToS3(blobItem, s3ObjectName)
+    this.copyBlobToS3(blobItem)
       .then(() => callback(null))
       .catch((err) => callback(err));
   }
 
-  private async copyBlobToS3(
-    blobItem: BlobItem,
-    s3ObjectName: string
-  ): Promise<void> {
-    let headObjectOutput: HeadObjectOutput | undefined;
-    try {
-      headObjectOutput = await this.s3Client.send(
-        new HeadObjectCommand({
-          Bucket: this.s3BucketName,
-          Key: s3ObjectName,
-        })
-      );
-    } catch (err) {
-      if (err instanceof Error && err.name !== "NotFound") {
-        throw err;
-      }
-    }
-
-    if (blobItem.properties.contentLength === headObjectOutput?.ContentLength) {
-      return;
-    }
-
-    await retry(
+  private copyBlobToS3(blobItem: BlobItem): Promise<void> {
+    return retry(
       async () => {
         const blobItemClient = this.containerClient.getBlobClient(
           blobItem.name
@@ -146,7 +199,7 @@ export class BlobToS3CopyStream extends Transform {
           client: this.s3Client,
           params: {
             Bucket: this.s3BucketName,
-            Key: s3ObjectName,
+            Key: this.mapS3ObjectName(blobItem.name),
             Body: blobDownloadResponse.readableStreamBody,
           },
         });

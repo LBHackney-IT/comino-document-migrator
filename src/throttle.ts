@@ -31,6 +31,8 @@ export class ThrottledTransformStream extends Transform {
     this.count++;
 
     this.limit().then(() => {
+      callback();
+
       this.stream._transform(chunk, encoding, (err, res) => {
         if (err) {
           this.emit("error", err);
@@ -45,8 +47,6 @@ export class ThrottledTransformStream extends Transform {
         }
       });
     });
-
-    callback();
   }
 
   _flush(callback: TransformCallback): void {

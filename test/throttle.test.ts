@@ -2,15 +2,6 @@ import { Readable, Transform, TransformCallback } from "stream";
 import { ThrottledTransformStream } from "../src/throttle";
 
 describe("ThrottledTransformStream", () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-  });
-
-  afterEach(() => {
-    jest.runOnlyPendingTimers();
-    jest.useRealTimers();
-  });
-
   describe("_transform", () => {
     for (const { testName, flush } of [
       {

@@ -1,6 +1,18 @@
 import convict from "convict";
 
 export const config = convict({
+  service: {
+    env: "SERVICE",
+    format: String,
+    default: "comino-document-migrator",
+  },
+  log: {
+    level: {
+      env: "LOG_LEVEL",
+      format: String,
+      default: "info",
+    },
+  },
   azure: {
     blob: {
       url: {
