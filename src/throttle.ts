@@ -1,16 +1,15 @@
 import { Transform, TransformCallback } from "stream";
 import { EventEmitter } from "events";
-import { RateLimit } from "async-sema";
+import { Sema } from "async-sema";
 
 export interface ThrottledTransformStreamOptions {
   objectMode?: boolean;
-  queriesPerSecond?: number;
-  uniformDistribution?: boolean;
+  maxConcurrency?: number;
 }
 
 export class ThrottledTransformStream extends Transform {
   private stream: Transform;
-  private limit: () => Promise<void>;
+  private sema: Sema;
   private count = 0;
   private done?: EventEmitter;
 
@@ -18,9 +17,7 @@ export class ThrottledTransformStream extends Transform {
     super({ objectMode: options?.objectMode ?? false });
 
     this.stream = stream;
-    this.limit = RateLimit(options?.queriesPerSecond ?? 100, {
-      uniformDistribution: options?.uniformDistribution ?? false,
-    });
+    this.sema = new Sema(options?.maxConcurrency ?? 100);
   }
 
   _transform(
@@ -30,23 +27,33 @@ export class ThrottledTransformStream extends Transform {
   ): void {
     this.count++;
 
-    this.limit().then(() => {
-      callback();
+    this.sema
+      .acquire()
+      .then(() => {
+        callback();
 
-      this.stream._transform(chunk, encoding, (err, res) => {
-        if (err) {
-          this.emit("error", err);
-        } else if (res) {
-          this.push(res);
-        }
+        return new Promise((resolve, reject) =>
+          this.stream._transform(chunk, encoding, (err, res) => {
+            if (err) {
+              reject(err);
 
+              return;
+            }
+
+            resolve(res);
+          })
+        );
+      })
+      .then((res) => this.push(res))
+      .catch((err) => this.emit("error", err))
+      .then(() => {
         this.count--;
 
         if (this.done && !this.count) {
           this.done.emit("finish");
         }
-      });
-    });
+      })
+      .finally(() => this.sema.release());
   }
 
   _flush(callback: TransformCallback): void {
