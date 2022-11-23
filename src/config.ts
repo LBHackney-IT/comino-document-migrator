@@ -62,10 +62,10 @@ export const config = convict({
     },
   },
   migration: {
-    maxDocumentsPerSecond: {
-      env: "MIGRATION_MAX_DOCUMENTS_PER_SECOND",
+    maxConcurrentDocuments: {
+      env: "MIGRATION_MAX_CONCURRENT_DOCUMENTS",
       format: Number,
-      default: 100,
+      default: 32,
     },
     maxRetriesPerDocument: {
       env: "MIGRATION_MAX_RETRIES_PER_DOCUMENT",

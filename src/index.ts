@@ -40,8 +40,7 @@ const blobToS3CopyStream = new BlobToS3CopyStream({
 });
 const throttledCopyStream = new ThrottledTransformStream(blobToS3CopyStream, {
   objectMode: true,
-  queriesPerSecond: config.migration.maxDocumentsPerSecond,
-  uniformDistribution: true,
+  maxConcurrency: config.migration.maxConcurrentDocuments,
 });
 
 pipeline(blobListStream, blobFilterStream, throttledCopyStream, (err) => {
