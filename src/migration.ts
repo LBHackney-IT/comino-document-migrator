@@ -1,11 +1,13 @@
 import { Sema } from "async-sema";
+import retry from "async-retry";
 import { BlobContainer, S3Bucket } from "./storage";
 
 export interface MigrationConfig {
   blobContainer: BlobContainer;
   s3Bucket: S3Bucket;
   s3ObjectNameMapper: (blobName: string) => string;
-  maxConcurrency: number;
+  maxConcurrentDocuments: number;
+  maxRetriesPerDocument: number;
 }
 
 export const createMigration =
@@ -13,10 +15,11 @@ export const createMigration =
     blobContainer,
     s3Bucket,
     s3ObjectNameMapper: mapS3ObjectName,
-    maxConcurrency,
+    maxConcurrentDocuments = 32,
+    maxRetriesPerDocument = 10,
   }: MigrationConfig) =>
   async () => {
-    const sema = new Sema(maxConcurrency);
+    const sema = new Sema(maxConcurrentDocuments);
     const blobItems = blobContainer.listBlobs();
 
     for await (const blobItem of blobItems) {
@@ -33,11 +36,16 @@ export const createMigration =
           return;
         }
 
-        const content = await blobContainer.getBlobContent(blobItem.name);
-        await s3Bucket.putObjectStream(
-          s3ObjectName,
-          content.contentType,
-          content.body
+        await retry(
+          async () => {
+            const content = await blobContainer.getBlobContent(blobItem.name);
+            await s3Bucket.putObjectStream(
+              s3ObjectName,
+              content.contentType,
+              content.body
+            );
+          },
+          { retries: maxRetriesPerDocument }
         );
       })().finally(() => sema.release());
     }

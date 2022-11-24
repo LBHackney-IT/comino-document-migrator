@@ -28,7 +28,8 @@ const runMigration = createMigration({
   blobContainer,
   s3Bucket,
   s3ObjectNameMapper: path.basename,
-  maxConcurrency: config.migration.maxConcurrentDocuments,
+  maxConcurrentDocuments: config.migration.maxConcurrentDocuments,
+  maxRetriesPerDocument: config.migration.maxRetriesPerDocument,
 });
 
 runMigration()
