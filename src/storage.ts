@@ -42,11 +42,17 @@ export class BlobContainer {
     }
   }
 
-  async getBlobStream(name: string): Promise<ReadableStream | undefined> {
+  async getBlobContent(name: string): Promise<{
+    body?: ReadableStream;
+    contentType?: string;
+  }> {
     const blobItemClient = this.client.getBlobClient(name);
     const blobDownloadResponse = await blobItemClient.download();
 
-    return blobDownloadResponse.readableStreamBody;
+    return {
+      body: blobDownloadResponse.readableStreamBody,
+      contentType: blobDownloadResponse.contentType,
+    };
   }
 }
 
@@ -66,7 +72,7 @@ export class S3Bucket {
   constructor({ s3Client, name, prefix, logger }: S3BucketConfig) {
     this.client = s3Client;
     this.name = name;
-    this.prefix = prefix;
+    this.prefix = prefix ?? "";
     this.logger = logger;
   }
 
@@ -103,12 +109,17 @@ export class S3Bucket {
     return true;
   }
 
-  async putObjectStream(name: string, stream?: ReadableStream): Promise<void> {
+  async putObjectStream(
+    name: string,
+    contentType?: string,
+    stream?: ReadableStream
+  ): Promise<void> {
     const upload = new Upload({
       client: this.client,
       params: {
         Bucket: this.name,
         Key: this.mapObjectName(name),
+        ContentType: contentType,
         Body: stream,
       },
     });

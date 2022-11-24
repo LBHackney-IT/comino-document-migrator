@@ -33,8 +33,12 @@ export const createMigration =
           return;
         }
 
-        const blobStream = await blobContainer.getBlobStream(blobItem.name);
-        await s3Bucket.putObjectStream(s3ObjectName, blobStream);
+        const content = await blobContainer.getBlobContent(blobItem.name);
+        await s3Bucket.putObjectStream(
+          s3ObjectName,
+          content.contentType,
+          content.body
+        );
       })().finally(() => sema.release());
     }
 
