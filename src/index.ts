@@ -30,6 +30,10 @@ const blobFilterStream = new BlobFilterStream({
   s3ObjectNameMapper,
   logger,
 });
+const throttledFilterStream = new ThrottledTransformStream(blobFilterStream, {
+  objectMode: true,
+  maxConcurrency: config.migration.maxConcurrentDocuments,
+});
 const blobToS3CopyStream = new BlobToS3CopyStream({
   blobClient,
   blobContainerName: config.azure.blob.containerName,
@@ -43,8 +47,12 @@ const throttledCopyStream = new ThrottledTransformStream(blobToS3CopyStream, {
   maxConcurrency: config.migration.maxConcurrentDocuments,
 });
 
-pipeline(blobListStream, blobFilterStream, throttledCopyStream, (err) => {
+pipeline(blobListStream, throttledFilterStream, throttledCopyStream, (err) => {
   if (err) {
     logger.error(err);
+
+    return;
   }
+
+  logger.info("Finished migration");
 });

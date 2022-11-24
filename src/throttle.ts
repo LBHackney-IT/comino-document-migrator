@@ -44,7 +44,7 @@ export class ThrottledTransformStream extends Transform {
           })
         );
       })
-      .then((res) => this.push(res))
+      .then((res) => res !== undefined && this.push(res))
       .catch((err) => this.emit("error", err))
       .then(() => {
         this.count--;
