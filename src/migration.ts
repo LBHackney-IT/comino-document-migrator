@@ -1,41 +1,41 @@
-import { BlobItem } from "@azure/storage-blob";
 import { Sema } from "async-sema";
+import { BlobContainer, S3Bucket } from "./storage";
 
-export interface BlobToS3MigrationConfig {
-  s3ObjectNameMap: (blobName: string) => string;
-  blobToS3Predicate: (
-    blobItem: BlobItem,
-    s3ObjectName: string
-  ) => Promise<boolean>;
-  blobToS3Copy: (blobItem: BlobItem, s3ObjectName: string) => Promise<void>;
+export interface MigrationConfig {
+  blobContainer: BlobContainer;
+  s3Bucket: S3Bucket;
+  s3ObjectNameMapper: (blobName: string) => string;
   maxConcurrency: number;
 }
 
-export const createBlobToS3Migration =
+export const createMigration =
   ({
-    s3ObjectNameMap: mapS3ObjectName,
-    blobToS3Predicate: shouldCopyBlob,
-    blobToS3Copy: copyBlobToS3,
+    blobContainer,
+    s3Bucket,
+    s3ObjectNameMapper: mapS3ObjectName,
     maxConcurrency,
-  }: BlobToS3MigrationConfig) =>
-  async (blobItems: AsyncIterable<BlobItem>) => {
+  }: MigrationConfig) =>
+  async () => {
     const sema = new Sema(maxConcurrency);
-
-    const migrateBlobToS3 = async (blobItem: BlobItem) => {
-      const s3ObjectName = mapS3ObjectName(blobItem.name);
-
-      const blobShouldBeCopied = await shouldCopyBlob(blobItem, s3ObjectName);
-      if (!blobShouldBeCopied) {
-        return;
-      }
-
-      await copyBlobToS3(blobItem, s3ObjectName);
-    };
+    const blobItems = blobContainer.listBlobs();
 
     for await (const blobItem of blobItems) {
       await sema.acquire();
 
-      migrateBlobToS3(blobItem).finally(() => sema.release());
+      (async () => {
+        const s3ObjectName = mapS3ObjectName(blobItem.name);
+
+        const objectExists = await s3Bucket.doesObjectExist(
+          s3ObjectName,
+          blobItem.properties.contentLength
+        );
+        if (objectExists) {
+          return;
+        }
+
+        const blobStream = await blobContainer.getBlobStream(blobItem.name);
+        await s3Bucket.putObjectStream(s3ObjectName, blobStream);
+      })().finally(() => sema.release());
     }
 
     await sema.drain();
