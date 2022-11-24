@@ -65,7 +65,7 @@ export class BlobContainer {
 export interface S3BucketConfig {
   s3Client: S3Client;
   name: string;
-  prefix: string;
+  prefix?: string;
   logger: Logger;
 }
 
