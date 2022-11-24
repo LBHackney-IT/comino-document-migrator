@@ -14,10 +14,7 @@ export class ThrottledTransformStream extends Transform {
   private done?: EventEmitter;
 
   constructor(stream: Transform, options?: ThrottledTransformStreamOptions) {
-    super({
-      objectMode: options?.objectMode ?? false,
-      highWaterMark: options?.maxConcurrency ?? 16,
-    });
+    super({ objectMode: options?.objectMode ?? false });
 
     this.stream = stream;
     this.sema = new Sema(options?.maxConcurrency ?? 100);

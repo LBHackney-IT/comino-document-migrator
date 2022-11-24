@@ -50,5 +50,9 @@ const throttledCopyStream = new ThrottledTransformStream(blobToS3CopyStream, {
 pipeline(blobListStream, throttledFilterStream, throttledCopyStream, (err) => {
   if (err) {
     logger.error(err);
+
+    return;
   }
+
+  logger.info("Finished migration");
 });
