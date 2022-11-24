@@ -1,7 +1,6 @@
 import path from "path";
 import {
   BlobServiceClient as BlobClient,
-  BlobItem,
   ContainerClient,
 } from "@azure/storage-blob";
 import {
@@ -11,6 +10,16 @@ import {
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { Logger } from "./log";
+
+export interface BlobMetadata {
+  name: string;
+  contentLength?: number;
+}
+
+export interface BlobContent {
+  body?: ReadableStream;
+  contentType?: string;
+}
 
 export interface BlobContainerConfig {
   blobClient: BlobClient;
@@ -30,22 +39,19 @@ export class BlobContainer {
     this.pageSize = pageSize ?? 100;
   }
 
-  async *listBlobs(): AsyncIterable<BlobItem> {
+  async *listBlobs(): AsyncIterable<BlobMetadata> {
     const pages = this.client
       .listBlobsFlat({ prefix: this.prefix })
       .byPage({ maxPageSize: this.pageSize });
 
     for await (const page of pages) {
       for (const item of page.segment.blobItems) {
-        yield item;
+        yield { name: item.name, contentLength: item.properties.contentLength };
       }
     }
   }
 
-  async getBlobContent(name: string): Promise<{
-    body?: ReadableStream;
-    contentType?: string;
-  }> {
+  async getBlobContent(name: string): Promise<BlobContent> {
     const blobItemClient = this.client.getBlobClient(name);
     const blobDownloadResponse = await blobItemClient.download();
 

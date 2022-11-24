@@ -20,17 +20,17 @@ export const createMigration =
   }: MigrationConfig) =>
   async () => {
     const sema = new Sema(maxConcurrentDocuments);
-    const blobItems = blobContainer.listBlobs();
+    const BlobMetadataList = blobContainer.listBlobs();
 
-    for await (const blobItem of blobItems) {
+    for await (const blobMetadata of BlobMetadataList) {
       await sema.acquire();
 
       (async () => {
-        const s3ObjectName = mapS3ObjectName(blobItem.name);
+        const s3ObjectName = mapS3ObjectName(blobMetadata.name);
 
         const objectExists = await s3Bucket.doesObjectExist(
           s3ObjectName,
-          blobItem.properties.contentLength
+          blobMetadata.contentLength
         );
         if (objectExists) {
           return;
@@ -38,7 +38,9 @@ export const createMigration =
 
         await retry(
           async () => {
-            const content = await blobContainer.getBlobContent(blobItem.name);
+            const content = await blobContainer.getBlobContent(
+              blobMetadata.name
+            );
             await s3Bucket.putObjectStream(
               s3ObjectName,
               content.contentType,
