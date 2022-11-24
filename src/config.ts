@@ -67,10 +67,5 @@ export const config = convict({
       format: Number,
       default: 32,
     },
-    maxRetriesPerDocument: {
-      env: "MIGRATION_MAX_RETRIES_PER_DOCUMENT",
-      format: Number,
-      default: 10,
-    },
   },
 }).getProperties();
