@@ -1,8 +1,6 @@
-import { Readable, Transform, TransformCallback } from "stream";
+import path from "path";
 import {
   BlobServiceClient as BlobClient,
-  BlobItem,
-  ContainerListBlobFlatSegmentResponse,
   ContainerClient,
 } from "@azure/storage-blob";
 import {
@@ -11,202 +9,136 @@ import {
   HeadObjectOutput,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
-import retry from "async-retry";
 import { Logger } from "./log";
 
-export interface BlobListStreamConfig {
+export interface BlobMetadata {
+  name: string;
+  contentLength?: number;
+}
+
+export interface BlobContent {
+  body?: ReadableStream;
+  contentType?: string;
+}
+
+export interface BlobContainerConfig {
   blobClient: BlobClient;
-  blobContainerName: string;
-  blobPrefix?: string;
+  name: string;
+  prefix?: string;
   pageSize?: number;
 }
 
-export class BlobListStream extends Readable {
-  private iterator: AsyncIterableIterator<ContainerListBlobFlatSegmentResponse>;
-  private queue: BlobItem[] = [];
+export class BlobContainer {
+  private client: ContainerClient;
+  private prefix: string;
+  private pageSize: number;
 
   constructor({
     blobClient,
-    blobContainerName,
-    blobPrefix,
-    pageSize,
-  }: BlobListStreamConfig) {
-    super({ objectMode: true });
-
-    const containerClient = blobClient.getContainerClient(blobContainerName);
-    this.iterator = containerClient
-      .listBlobsFlat({ prefix: blobPrefix })
-      .byPage({ maxPageSize: pageSize ?? 100 });
+    name,
+    prefix = "",
+    pageSize = 100,
+  }: BlobContainerConfig) {
+    this.client = blobClient.getContainerClient(name);
+    this.prefix = prefix;
+    this.pageSize = pageSize;
   }
 
-  _read() {
-    if (this.queue.length > 0) {
-      const item = this.queue.shift();
-      this.push(item);
+  async *listBlobs(): AsyncIterable<BlobMetadata> {
+    const pages = this.client
+      .listBlobsFlat({ prefix: this.prefix })
+      .byPage({ maxPageSize: this.pageSize });
 
-      return;
+    for await (const page of pages) {
+      for (const item of page.segment.blobItems) {
+        yield { name: item.name, contentLength: item.properties.contentLength };
+      }
     }
+  }
 
-    this.iterator
-      .next()
-      .then((res) => {
-        if (res.done || res.value.segment.blobItems.length === 0) {
-          this.push(null);
+  async getBlobContent(name: string): Promise<BlobContent> {
+    const blobItemClient = this.client.getBlobClient(name);
+    const blobDownloadResponse = await blobItemClient.download();
 
-          return;
-        }
-
-        this.queue = res.value.segment.blobItems;
-
-        const item = this.queue.shift();
-        this.push(item);
-      })
-      .catch((err) => this.emit("error", err));
+    return {
+      body: blobDownloadResponse.readableStreamBody,
+      contentType: blobDownloadResponse.contentType,
+    };
   }
 }
 
-export interface ObjectNameMapper {
-  (name: string): string;
-}
-
-export interface BlobFilterStreamConfig {
+export interface S3BucketConfig {
   s3Client: S3Client;
-  s3BucketName: string;
-  s3ObjectNameMapper: ObjectNameMapper;
+  name: string;
+  prefix?: string;
   logger: Logger;
 }
 
-export class BlobFilterStream extends Transform {
-  private s3Client: S3Client;
-  private s3BucketName: string;
-  private mapS3ObjectName: ObjectNameMapper;
+export class S3Bucket {
+  private client: S3Client;
+  private name: string;
+  private prefix: string;
   private logger: Logger;
 
-  constructor({
-    s3Client,
-    s3BucketName,
-    s3ObjectNameMapper,
-    logger,
-  }: BlobFilterStreamConfig) {
-    super({ objectMode: true });
-
-    this.s3Client = s3Client;
-    this.s3BucketName = s3BucketName;
-    this.mapS3ObjectName = s3ObjectNameMapper;
+  constructor({ s3Client, name, prefix = "", logger }: S3BucketConfig) {
+    this.client = s3Client;
+    this.name = name;
+    this.prefix = prefix;
     this.logger = logger;
   }
 
-  _transform(
-    blobItem: BlobItem,
-    _encoding: BufferEncoding,
-    callback: TransformCallback
-  ): void {
-    this.filterBlob(blobItem)
-      .then((res) => callback(null, res))
-      .catch((err) => callback(err));
-  }
-
-  private async filterBlob(blobItem: BlobItem): Promise<BlobItem | undefined> {
-    const s3ObjectName = this.mapS3ObjectName(blobItem.name);
+  async doesObjectExist(
+    name: string,
+    contentLength?: number
+  ): Promise<boolean> {
+    const mappedName = this.mapObjectName(name);
 
     let headObjectOutput: HeadObjectOutput | undefined;
     try {
-      headObjectOutput = await this.s3Client.send(
+      headObjectOutput = await this.client.send(
         new HeadObjectCommand({
-          Bucket: this.s3BucketName,
-          Key: s3ObjectName,
+          Bucket: this.name,
+          Key: this.mapObjectName(name),
         })
       );
     } catch (err) {
       if (err instanceof Error && err.name !== "NotFound") {
         throw err;
       }
+
+      return false;
     }
 
-    if (blobItem.properties.contentLength === headObjectOutput?.ContentLength) {
-      return;
-    }
-
-    if (headObjectOutput?.ContentLength) {
-      this.logger.info("Existing S3 object is being updated", {
-        azureBlob: {
-          name: blobItem.name,
-          contentLength: blobItem.properties.contentLength,
-        },
-        s3Object: {
-          name: s3ObjectName,
-          contentLength: headObjectOutput.ContentLength,
-        },
+    if (contentLength !== headObjectOutput.ContentLength) {
+      this.logger.info("Duplicate object name", {
+        objectName: mappedName,
       });
+
+      return false;
     }
 
-    return blobItem;
-  }
-}
-
-export interface BlobToS3CopyStreamConfig {
-  blobClient: BlobClient;
-  blobContainerName: string;
-  s3Client: S3Client;
-  s3BucketName: string;
-  s3ObjectNameMapper: ObjectNameMapper;
-  maxRetries?: number;
-}
-
-export class BlobToS3CopyStream extends Transform {
-  private containerClient: ContainerClient;
-  private s3Client: S3Client;
-  private s3BucketName: string;
-  private mapS3ObjectName: ObjectNameMapper;
-  private maxRetries?: number;
-
-  constructor({
-    blobClient,
-    blobContainerName,
-    s3Client,
-    s3BucketName,
-    s3ObjectNameMapper,
-    maxRetries,
-  }: BlobToS3CopyStreamConfig) {
-    super({ objectMode: true });
-
-    this.containerClient = blobClient.getContainerClient(blobContainerName);
-    this.s3Client = s3Client;
-    this.s3BucketName = s3BucketName;
-    this.mapS3ObjectName = s3ObjectNameMapper;
-    this.maxRetries = maxRetries ?? 10;
+    return true;
   }
 
-  _transform(
-    blobItem: BlobItem,
-    _encoding: BufferEncoding,
-    callback: TransformCallback
-  ): void {
-    this.copyBlobToS3(blobItem)
-      .then(() => callback(null))
-      .catch((err) => callback(err));
-  }
-
-  private copyBlobToS3(blobItem: BlobItem): Promise<void> {
-    return retry(
-      async () => {
-        const blobItemClient = this.containerClient.getBlobClient(
-          blobItem.name
-        );
-        const blobDownloadResponse = await blobItemClient.download();
-
-        const upload = new Upload({
-          client: this.s3Client,
-          params: {
-            Bucket: this.s3BucketName,
-            Key: this.mapS3ObjectName(blobItem.name),
-            Body: blobDownloadResponse.readableStreamBody,
-          },
-        });
-
-        await upload.done();
+  async putObjectStream(
+    name: string,
+    contentType?: string,
+    stream?: ReadableStream
+  ): Promise<void> {
+    const upload = new Upload({
+      client: this.client,
+      params: {
+        Bucket: this.name,
+        Key: this.mapObjectName(name),
+        ContentType: contentType,
+        Body: stream,
       },
-      { retries: this.maxRetries }
-    );
+    });
+
+    await upload.done();
+  }
+
+  private mapObjectName(name: string): string {
+    return path.join(this.prefix, name);
   }
 }

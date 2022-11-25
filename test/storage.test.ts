@@ -1,13 +1,8 @@
-import { Readable } from "stream";
 import { BlobServiceClient as BlobClient } from "@azure/storage-blob";
 import { S3Client } from "@aws-sdk/client-s3";
 import * as libStorage from "@aws-sdk/lib-storage";
 import { partial } from "./helpers";
-import {
-  BlobListStream,
-  BlobFilterStream,
-  BlobToS3CopyStream,
-} from "../src/storage";
+import { BlobContainer, BlobMetadata, S3Bucket } from "../src/storage";
 import { Logger } from "../src/log";
 
 jest.mock("@aws-sdk/lib-storage");
@@ -17,370 +12,73 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe("BlobListStream", () => {
-  describe("_read", () => {
-    test("successfully emits the blob items", (done) => {
+describe("BlobContainer", () => {
+  describe("listBlobs", () => {
+    test("successfully lists blobs", async () => {
       const containerName = "test";
-      const pages = [["1.js", "2.js"], ["3.js", "4.js"], ["5.js"]].map((page) =>
-        page.map((name) => ({ name }))
+      const pageSize = 2;
+      const pages = [
+        [
+          { name: "1.txt", properties: { contentLength: 1 } },
+          { name: "2.txt", properties: { contentLength: 3 } },
+        ],
+        [
+          { name: "3.txt", properties: { contentLength: 4 } },
+          { name: "4.txt", properties: { contentLength: 2 } },
+        ],
+        [{ name: "5.txt", properties: { contentLength: 3 } }],
+      ];
+
+      const expected = pages.reduce(
+        (acc, page) => [
+          ...acc,
+          ...page.map((item) => ({
+            name: item.name,
+            contentLength: item.properties.contentLength,
+          })),
+        ],
+        [] as BlobMetadata[]
       );
-      const results = [
-        ...pages.map((page) => ({
-          value: {
-            segment: {
-              blobItems: page,
-            },
-          },
-        })),
-        {
-          done: true,
-        },
-      ];
-
-      const expected = pages.reduce((acc, page) => [...acc, ...page], []);
 
       const mockBlobClient = partial<BlobClient>({
         getContainerClient: () => ({
           listBlobsFlat: () => ({
-            byPage: () => {
-              let index = 0;
-              return {
-                next: () => {
-                  return Promise.resolve(results[index++]);
-                },
-              };
+            byPage: async function* () {
+              for (const page of pages) {
+                yield { segment: { blobItems: page } };
+              }
             },
           }),
         }),
       });
 
-      const stream = new BlobListStream({
+      const blobContainer = new BlobContainer({
         blobClient: mockBlobClient,
-        blobContainerName: containerName,
+        name: containerName,
+        pageSize,
       });
+      const blobMetadataList = blobContainer.listBlobs();
 
-      let actual: string[] = [];
-      stream
-        .on("data", (result) => {
-          actual = [...actual, result];
-        })
-        .on("end", () => {
-          try {
-            expect(actual).toEqual(expected);
-            done();
-          } catch (err) {
-            done(err);
-          }
-        });
-    });
+      let actual: BlobMetadata[] = [];
+      for await (const blobMetadata of blobMetadataList) {
+        actual = [...actual, blobMetadata];
+      }
 
-    test("successfully handles empty results", (done) => {
-      const containerName = "test";
-      const results = [
-        {
-          value: {
-            segment: {
-              blobItems: [],
-            },
-          },
-        },
-        {
-          done: true,
-        },
-      ];
-
-      const expected: string[] = [];
-
-      const mockBlobClient = partial<BlobClient>({
-        getContainerClient: () => ({
-          listBlobsFlat: () => ({
-            byPage: () => {
-              let index = 0;
-              return {
-                next: () => {
-                  return Promise.resolve(results[index++]);
-                },
-              };
-            },
-          }),
-        }),
-      });
-
-      const stream = new BlobListStream({
-        blobClient: mockBlobClient,
-        blobContainerName: containerName,
-      });
-
-      let actual: string[] = [];
-      stream
-        .on("data", (result) => {
-          actual = [...actual, result];
-        })
-        .on("end", () => {
-          try {
-            expect(actual).toEqual(expected);
-            done();
-          } catch (err) {
-            done(err);
-          }
-        });
-    });
-
-    test("successfully emits an error on failure", (done) => {
-      const containerName = "test";
-
-      const errorMessage = "test error";
-      const expected = new Error(errorMessage);
-
-      const mockBlobClient = partial<BlobClient>({
-        getContainerClient: () => ({
-          listBlobsFlat: () => ({
-            byPage: () => ({
-              next: () => {
-                return Promise.reject(new Error(errorMessage));
-              },
-            }),
-          }),
-        }),
-      });
-
-      const stream = new BlobListStream({
-        blobClient: mockBlobClient,
-        blobContainerName: containerName,
-      });
-
-      stream
-        .on("data", () => undefined)
-        .on("error", (actual) => {
-          try {
-            expect(actual).toEqual(expected);
-            done();
-          } catch (err) {
-            done(err);
-          }
-        });
+      expect(actual).toEqual(expected);
     });
   });
-});
 
-describe("BlobFilterStream", () => {
-  describe("_transform", () => {
-    test("successfully emits a blob item for upload", (done) => {
-      const blobName = "root/01/02/test.txt";
-      const blobContentLength = 6;
-      const blobItem = {
-        name: blobName,
-        properties: { contentLength: blobContentLength },
+  describe("getBlobContent", () => {
+    test("successfully gets the blob content", async () => {
+      const containerName = "test";
+      const blobName = "test.txt";
+      const blobContentType = "text/plain";
+      const blobStream = partial<ReadableStream>({});
+
+      const expected = {
+        body: blobStream,
+        contentType: blobContentType,
       };
-      const s3BucketName = "s3-test";
-
-      const error = new Error("Not found");
-      error.name = "NotFound";
-
-      const expected = [blobItem];
-
-      const inputStream = new Readable({ objectMode: true });
-      inputStream.push(blobItem);
-      inputStream.push(null);
-
-      const mockS3Client = partial<S3Client>({
-        send: () => Promise.reject(error),
-      });
-
-      const mockS3ObjectNameMapper = (name: string) => name;
-
-      const mockLogger = partial<Logger>({});
-
-      const stream = new BlobFilterStream({
-        s3Client: mockS3Client,
-        s3BucketName,
-        s3ObjectNameMapper: mockS3ObjectNameMapper,
-        logger: mockLogger,
-      });
-
-      let actual: string[] = [];
-      inputStream
-        .pipe(stream)
-        .on("data", (result) => {
-          actual = [...actual, result];
-        })
-        .on("end", () => {
-          try {
-            expect(actual).toEqual(expected);
-            done();
-          } catch (err) {
-            done(err);
-          }
-        });
-    });
-
-    test("successfully emits a blob item for re-upload", (done) => {
-      const blobName = "root/01/02/test.txt";
-      const blobContentLength = 6;
-      const blobItem = {
-        name: blobName,
-        properties: { contentLength: blobContentLength },
-      };
-      const s3BucketName = "s3-test";
-      const s3ObjectContentLength = 12;
-
-      const expected = [blobItem];
-
-      const inputStream = new Readable({ objectMode: true });
-      inputStream.push(blobItem);
-      inputStream.push(null);
-
-      const mockS3Client = partial<S3Client>({
-        send: () =>
-          Promise.resolve({
-            ContentLength: s3ObjectContentLength,
-          }),
-      });
-
-      const mockS3ObjectNameMapper = (name: string) => name;
-
-      const mockLoggerInfo = jest.fn();
-      const mockLogger = partial<Logger>({
-        info: mockLoggerInfo,
-      });
-
-      const stream = new BlobFilterStream({
-        s3Client: mockS3Client,
-        s3BucketName,
-        s3ObjectNameMapper: mockS3ObjectNameMapper,
-        logger: mockLogger,
-      });
-
-      let actual: string[] = [];
-      inputStream
-        .pipe(stream)
-        .on("data", (result) => {
-          actual = [...actual, result];
-        })
-        .on("end", () => {
-          try {
-            expect(mockLoggerInfo).toBeCalled();
-            expect(actual).toEqual(expected);
-            done();
-          } catch (err) {
-            done(err);
-          }
-        });
-    });
-
-    test("successfully ignores a blob item already uploaded", (done) => {
-      const blobName = "root/01/02/test.txt";
-      const blobContentLength = 6;
-      const blobItem = {
-        name: blobName,
-        properties: { contentLength: blobContentLength },
-      };
-      const s3BucketName = "s3-test";
-      const s3ObjectContentLength = 6;
-
-      const expected: string[] = [];
-
-      const inputStream = new Readable({ objectMode: true });
-      inputStream.push(blobItem);
-      inputStream.push(null);
-
-      const mockS3Client = partial<S3Client>({
-        send: () =>
-          Promise.resolve({
-            ContentLength: s3ObjectContentLength,
-          }),
-      });
-
-      const mockS3ObjectNameMapper = (name: string) => name;
-
-      const mockLogger = partial<Logger>({});
-
-      const stream = new BlobFilterStream({
-        s3Client: mockS3Client,
-        s3BucketName,
-        s3ObjectNameMapper: mockS3ObjectNameMapper,
-        logger: mockLogger,
-      });
-
-      let actual: string[] = [];
-      inputStream
-        .pipe(stream)
-        .on("data", (result) => {
-          actual = [...actual, result];
-        })
-        .on("end", () => {
-          try {
-            expect(actual).toEqual(expected);
-            done();
-          } catch (err) {
-            done(err);
-          }
-        });
-    });
-
-    test("successfully emits an error on failure", (done) => {
-      const blobName = "root/01/02/test.txt";
-      const blobContentLength = 6;
-      const blobItem = {
-        name: blobName,
-        properties: { contentLength: blobContentLength },
-      };
-      const s3BucketName = "s3-test";
-
-      const errorMessage = "test error";
-      const expected = new Error(errorMessage);
-
-      const inputStream = new Readable({ objectMode: true });
-      inputStream.push(blobItem);
-      inputStream.push(null);
-
-      const mockS3Client = partial<S3Client>({
-        send: () => Promise.reject(new Error(errorMessage)),
-      });
-
-      const mockS3ObjectNameMapper = (name: string) => name;
-
-      const mockLogger = partial<Logger>({});
-
-      const stream = new BlobFilterStream({
-        s3Client: mockS3Client,
-        s3BucketName,
-        s3ObjectNameMapper: mockS3ObjectNameMapper,
-        logger: mockLogger,
-      });
-
-      inputStream
-        .pipe(stream)
-        .on("data", () => undefined)
-        .on("error", (actual) => {
-          try {
-            expect(actual).toEqual(expected);
-            done();
-          } catch (err) {
-            done(err);
-          }
-        });
-    });
-  });
-});
-
-describe("BlobToS3CopyStream", () => {
-  describe("_transform", () => {
-    test("successfully uploads a blob item", (done) => {
-      const blobName = "root/01/02/test.txt";
-      const blobBody = "test";
-      const blobContainerName = "blob-test";
-      const s3BucketName = "s3-test";
-
-      const inputStream = new Readable({ objectMode: true });
-      inputStream.push({
-        name: blobName,
-      });
-      inputStream.push(null);
-
-      const blobStream = new Readable();
-      blobStream.push(blobBody);
-      blobStream.push(null);
 
       const mockBlobClient = partial<BlobClient>({
         getContainerClient: () => ({
@@ -388,90 +86,173 @@ describe("BlobToS3CopyStream", () => {
             download: () =>
               Promise.resolve({
                 readableStreamBody: blobStream,
+                contentType: blobContentType,
               }),
           }),
         }),
       });
 
-      const mockS3Client = partial<S3Client>({});
+      const blobContainer = new BlobContainer({
+        blobClient: mockBlobClient,
+        name: containerName,
+      });
+      const actual = await blobContainer.getBlobContent(blobName);
 
-      const mockS3ObjectNameMapper = (name: string) => name;
+      expect(actual).toEqual(expected);
+    });
+  });
+});
+
+describe("S3Bucket", () => {
+  describe("doesObjectExist", () => {
+    test("successfully identifies an existing object", async () => {
+      const bucketName = "test";
+      const blobName = "test.txt";
+      const blobContentLength = 6;
+      const objectContentLength = 6;
+
+      const expected = true;
+
+      const mockS3Client = partial<S3Client>({
+        send: () =>
+          Promise.resolve({
+            ContentLength: objectContentLength,
+          }),
+      });
+
+      const mockLogger = partial<Logger>({});
+
+      const s3Bucket = new S3Bucket({
+        s3Client: mockS3Client,
+        name: bucketName,
+        logger: mockLogger,
+      });
+      const actual = await s3Bucket.doesObjectExist(
+        blobName,
+        blobContentLength
+      );
+
+      expect(actual).toEqual(expected);
+    });
+
+    test("successfully identifies an object with a duplicate name", async () => {
+      const bucketName = "test";
+      const blobName = "test.txt";
+      const blobContentLength = 6;
+      const objectContentLength = 7;
+
+      const expected = false;
+
+      const mockS3Client = partial<S3Client>({
+        send: () =>
+          Promise.resolve({
+            ContentLength: objectContentLength,
+          }),
+      });
+
+      const mockLoggerInfo = jest.fn();
+      const mockLogger = partial<Logger>({
+        info: mockLoggerInfo,
+      });
+
+      const s3Bucket = new S3Bucket({
+        s3Client: mockS3Client,
+        name: bucketName,
+        logger: mockLogger,
+      });
+      const actual = await s3Bucket.doesObjectExist(
+        blobName,
+        blobContentLength
+      );
+
+      expect(actual).toEqual(expected);
+      expect(mockLoggerInfo).toBeCalled();
+    });
+
+    test("successfully identfies a new object", async () => {
+      const bucketName = "test";
+      const blobName = "test.txt";
+      const blobContentLength = 6;
+      const error = new Error("Not found");
+      error.name = "NotFound";
+
+      const expected = false;
+
+      const mockS3Client = partial<S3Client>({
+        send: () => Promise.reject(error),
+      });
+
+      const mockLogger = partial<Logger>({});
+
+      const s3Bucket = new S3Bucket({
+        s3Client: mockS3Client,
+        name: bucketName,
+        logger: mockLogger,
+      });
+      const actual = await s3Bucket.doesObjectExist(
+        blobName,
+        blobContentLength
+      );
+
+      expect(actual).toEqual(expected);
+    });
+
+    test("successfully throws on failure", async () => {
+      const bucketName = "test";
+      const blobName = "test.txt";
+      const blobContentLength = 6;
+      const error = new Error("Test Error");
+
+      const expected = error;
+
+      const mockS3Client = partial<S3Client>({
+        send: () => Promise.reject(error),
+      });
+
+      const mockLogger = partial<Logger>({});
+
+      const s3Bucket = new S3Bucket({
+        s3Client: mockS3Client,
+        name: bucketName,
+        logger: mockLogger,
+      });
+
+      await expect(
+        s3Bucket.doesObjectExist(blobName, blobContentLength)
+      ).rejects.toThrowError(expected);
+    });
+  });
+
+  describe("putObjectStream", () => {
+    test("successfully uploads an object", async () => {
+      const bucketName = "test";
+      const objectName = "test.txt";
+      const blobContentType = "text/plain";
+      const blobStream = partial<ReadableStream>({});
+
+      const mockS3Client = partial<S3Client>({});
 
       const expected = {
         client: mockS3Client,
         params: {
-          Bucket: s3BucketName,
-          Key: blobName,
+          Bucket: bucketName,
+          Key: objectName,
+          ContentType: blobContentType,
           Body: blobStream,
         },
       };
 
-      const stream = new BlobToS3CopyStream({
-        blobClient: mockBlobClient,
-        blobContainerName,
+      const mockLogger = partial<Logger>({});
+
+      const s3Bucket = new S3Bucket({
         s3Client: mockS3Client,
-        s3BucketName,
-        s3ObjectNameMapper: mockS3ObjectNameMapper,
+        name: bucketName,
+        logger: mockLogger,
       });
+      await s3Bucket.putObjectStream(objectName, blobContentType, blobStream);
 
-      inputStream
-        .pipe(stream)
-        .on("data", () => undefined)
-        .on("end", () => {
-          try {
-            expect(mockLibStorage.Upload).toBeCalledWith(expected);
-            expect(mockLibStorage.Upload.mock.instances[0].done).toBeCalled();
-            done();
-          } catch (err) {
-            done(err);
-          }
-        });
-    });
-
-    test("successfully emits an error on failure", (done) => {
-      const blobName = "root/01/02/test.txt";
-      const blobContainerName = "blob-test";
-      const s3BucketName = "s3-test";
-
-      const errorMessage = "test error";
-      const expected = new Error(errorMessage);
-
-      const inputStream = new Readable({ objectMode: true });
-      inputStream.push({ name: blobName });
-      inputStream.push(null);
-
-      const mockBlobClient = partial<BlobClient>({
-        getContainerClient: () => ({
-          getBlobClient: () => ({
-            download: () => Promise.reject(new Error(errorMessage)),
-          }),
-        }),
-      });
-
-      const mockS3Client = partial<S3Client>({});
-
-      const mockS3ObjectNameMapper = (name: string) => name;
-
-      const stream = new BlobToS3CopyStream({
-        blobClient: mockBlobClient,
-        blobContainerName,
-        s3Client: mockS3Client,
-        s3BucketName,
-        s3ObjectNameMapper: mockS3ObjectNameMapper,
-        maxRetries: 0,
-      });
-
-      inputStream
-        .pipe(stream)
-        .on("data", () => undefined)
-        .on("error", (actual) => {
-          try {
-            expect(actual).toEqual(expected);
-            done();
-          } catch (err) {
-            done(err);
-          }
-        });
+      expect(mockLibStorage.Upload).toBeCalledWith(expected);
+      expect(mockLibStorage.Upload.mock.instances[0].done).toBeCalled();
     });
   });
 });
