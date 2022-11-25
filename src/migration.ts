@@ -1,4 +1,3 @@
-import { Sema } from "async-sema";
 import retry from "async-retry";
 import { BlobContainer, S3Bucket } from "./storage";
 
@@ -19,38 +18,37 @@ export const createMigration =
     maxRetriesPerDocument = 10,
   }: MigrationConfig) =>
   async () => {
-    const sema = new Sema(maxConcurrentDocuments);
     const blobMetadataList = blobContainer.listBlobs();
 
-    for await (const blobMetadata of blobMetadataList) {
-      await sema.acquire();
+    const workers = new Array(maxConcurrentDocuments)
+      .fill(blobMetadataList)
+      .map(async (blobMetadataList) => {
+        for await (const blobMetadata of blobMetadataList) {
+          const s3ObjectName = mapS3ObjectName(blobMetadata.name);
 
-      (async () => {
-        const s3ObjectName = mapS3ObjectName(blobMetadata.name);
+          const objectExists = await s3Bucket.doesObjectExist(
+            s3ObjectName,
+            blobMetadata.contentLength
+          );
+          if (objectExists) {
+            continue;
+          }
 
-        const objectExists = await s3Bucket.doesObjectExist(
-          s3ObjectName,
-          blobMetadata.contentLength
-        );
-        if (objectExists) {
-          return;
+          await retry(
+            async () => {
+              const content = await blobContainer.getBlobContent(
+                blobMetadata.name
+              );
+              await s3Bucket.putObjectStream(
+                s3ObjectName,
+                content.contentType,
+                content.body
+              );
+            },
+            { retries: maxRetriesPerDocument }
+          );
         }
+      });
 
-        await retry(
-          async () => {
-            const content = await blobContainer.getBlobContent(
-              blobMetadata.name
-            );
-            await s3Bucket.putObjectStream(
-              s3ObjectName,
-              content.contentType,
-              content.body
-            );
-          },
-          { retries: maxRetriesPerDocument }
-        );
-      })().finally(() => sema.release());
-    }
-
-    await sema.drain();
+    await Promise.all(workers);
   };
