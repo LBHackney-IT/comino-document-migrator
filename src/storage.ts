@@ -103,7 +103,9 @@ export class S3Bucket {
       );
     } catch (err) {
       if (err instanceof Error && err.name !== "NotFound") {
-        throw err;
+        this.logger.error(err, {
+          objectName: mappedName,
+        });
       }
 
       return false;
