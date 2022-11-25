@@ -6,8 +6,8 @@ export interface MigrationConfig {
   blobContainer: BlobContainer;
   s3Bucket: S3Bucket;
   s3ObjectNameMapper: (blobName: string) => string;
-  maxConcurrentDocuments: number;
-  maxRetriesPerDocument: number;
+  maxConcurrentDocuments?: number;
+  maxRetriesPerDocument?: number;
 }
 
 export const createMigration =

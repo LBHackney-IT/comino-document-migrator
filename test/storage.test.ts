@@ -26,7 +26,7 @@ describe("BlobContainer", () => {
           { name: "3.txt", properties: { contentLength: 4 } },
           { name: "4.txt", properties: { contentLength: 2 } },
         ],
-        [{ name: "4.txt", properties: { contentLength: 3 } }],
+        [{ name: "5.txt", properties: { contentLength: 3 } }],
       ];
 
       const expected = pages.reduce(
@@ -73,13 +73,7 @@ describe("BlobContainer", () => {
       const containerName = "test";
       const blobName = "test.txt";
       const blobContentType = "text/plain";
-      const blobBody = "test";
-      const blobStream = partial<ReadableStream>({
-        getReader: () => ({
-          read: () =>
-            Promise.resolve({ value: Buffer.from(blobBody), done: true }),
-        }),
-      });
+      const blobStream = partial<ReadableStream>({});
 
       const expected = {
         body: blobStream,
@@ -234,13 +228,7 @@ describe("S3Bucket", () => {
       const bucketName = "test";
       const objectName = "test.txt";
       const blobContentType = "text/plain";
-      const blobBody = "test";
-      const blobStream = partial<ReadableStream>({
-        getReader: () => ({
-          read: () =>
-            Promise.resolve({ value: Buffer.from(blobBody), done: true }),
-        }),
-      });
+      const blobStream = partial<ReadableStream>({});
 
       const mockS3Client = partial<S3Client>({});
 
