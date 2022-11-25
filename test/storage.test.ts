@@ -197,29 +197,35 @@ describe("S3Bucket", () => {
       expect(actual).toEqual(expected);
     });
 
-    test("successfully throws on failure", async () => {
+    test("successfully handles a failure", async () => {
       const bucketName = "test";
       const blobName = "test.txt";
       const blobContentLength = 6;
       const error = new Error("Test Error");
 
-      const expected = error;
+      const expected = false;
 
       const mockS3Client = partial<S3Client>({
         send: () => Promise.reject(error),
       });
 
-      const mockLogger = partial<Logger>({});
+      const mockLoggerError = jest.fn();
+      const mockLogger = partial<Logger>({
+        error: mockLoggerError,
+      });
 
       const s3Bucket = new S3Bucket({
         s3Client: mockS3Client,
         name: bucketName,
         logger: mockLogger,
       });
+      const actual = await s3Bucket.doesObjectExist(
+        blobName,
+        blobContentLength
+      );
 
-      await expect(
-        s3Bucket.doesObjectExist(blobName, blobContentLength)
-      ).rejects.toThrowError(expected);
+      expect(actual).toEqual(expected);
+      expect(mockLoggerError).toBeCalled();
     });
   });
 
