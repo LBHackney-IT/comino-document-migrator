@@ -33,10 +33,15 @@ export class BlobContainer {
   private prefix: string;
   private pageSize: number;
 
-  constructor({ blobClient, name, prefix, pageSize }: BlobContainerConfig) {
+  constructor({
+    blobClient,
+    name,
+    prefix = "",
+    pageSize = 100,
+  }: BlobContainerConfig) {
     this.client = blobClient.getContainerClient(name);
-    this.prefix = prefix ?? "";
-    this.pageSize = pageSize ?? 100;
+    this.prefix = prefix;
+    this.pageSize = pageSize;
   }
 
   async *listBlobs(): AsyncIterable<BlobMetadata> {
@@ -75,10 +80,10 @@ export class S3Bucket {
   private prefix: string;
   private logger: Logger;
 
-  constructor({ s3Client, name, prefix, logger }: S3BucketConfig) {
+  constructor({ s3Client, name, prefix = "", logger }: S3BucketConfig) {
     this.client = s3Client;
     this.name = name;
-    this.prefix = prefix ?? "";
+    this.prefix = prefix;
     this.logger = logger;
   }
 

@@ -20,9 +20,9 @@ export const createMigration =
   }: MigrationConfig) =>
   async () => {
     const sema = new Sema(maxConcurrentDocuments);
-    const BlobMetadataList = blobContainer.listBlobs();
+    const blobMetadataList = blobContainer.listBlobs();
 
-    for await (const blobMetadata of BlobMetadataList) {
+    for await (const blobMetadata of blobMetadataList) {
       await sema.acquire();
 
       (async () => {
