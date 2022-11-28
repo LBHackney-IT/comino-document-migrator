@@ -2,7 +2,8 @@ import { BlobServiceClient as BlobClient } from "@azure/storage-blob";
 import { S3Client } from "@aws-sdk/client-s3";
 import * as libStorage from "@aws-sdk/lib-storage";
 import { partial } from "./helpers";
-import { BlobContainer, BlobMetadata, S3Bucket } from "../src/storage";
+import { BlobContainer, S3Bucket } from "../src/storage";
+import { DocumentMetadata } from "../src/migration";
 import { Logger } from "../src/log";
 
 jest.mock("@aws-sdk/lib-storage");
@@ -13,8 +14,8 @@ beforeEach(() => {
 });
 
 describe("BlobContainer", () => {
-  describe("listBlobs", () => {
-    test("successfully lists blobs", async () => {
+  describe("listDocuments", () => {
+    test("successfully lists documents", async () => {
       const containerName = "test";
       const pageSize = 2;
       const pages = [
@@ -37,7 +38,7 @@ describe("BlobContainer", () => {
             contentLength: item.properties.contentLength,
           })),
         ],
-        [] as BlobMetadata[]
+        [] as DocumentMetadata[]
       );
 
       const mockBlobClient = partial<BlobClient>({
@@ -57,27 +58,27 @@ describe("BlobContainer", () => {
         name: containerName,
         pageSize,
       });
-      const blobMetadataList = blobContainer.listBlobs();
+      const documentMetadataList = blobContainer.listDocuments();
 
-      let actual: BlobMetadata[] = [];
-      for await (const blobMetadata of blobMetadataList) {
-        actual = [...actual, blobMetadata];
+      let actual: DocumentMetadata[] = [];
+      for await (const documentMetadata of documentMetadataList) {
+        actual = [...actual, documentMetadata];
       }
 
       expect(actual).toEqual(expected);
     });
   });
 
-  describe("getBlobContent", () => {
-    test("successfully gets the blob content", async () => {
+  describe("getDocumentContent", () => {
+    test("successfully gets the document content", async () => {
       const containerName = "test";
-      const blobName = "test.txt";
-      const blobContentType = "text/plain";
-      const blobStream = partial<ReadableStream>({});
+      const documentName = "test.txt";
+      const documentContentType = "text/plain";
+      const documentStream = partial<ReadableStream>({});
 
       const expected = {
-        body: blobStream,
-        contentType: blobContentType,
+        body: documentStream,
+        contentType: documentContentType,
       };
 
       const mockBlobClient = partial<BlobClient>({
@@ -85,8 +86,8 @@ describe("BlobContainer", () => {
           getBlobClient: () => ({
             download: () =>
               Promise.resolve({
-                readableStreamBody: blobStream,
-                contentType: blobContentType,
+                readableStreamBody: documentStream,
+                contentType: documentContentType,
               }),
           }),
         }),
@@ -96,7 +97,7 @@ describe("BlobContainer", () => {
         blobClient: mockBlobClient,
         name: containerName,
       });
-      const actual = await blobContainer.getBlobContent(blobName);
+      const actual = await blobContainer.getDocumentContent(documentName);
 
       expect(actual).toEqual(expected);
     });
@@ -104,19 +105,19 @@ describe("BlobContainer", () => {
 });
 
 describe("S3Bucket", () => {
-  describe("doesObjectExist", () => {
-    test("successfully identifies an existing object", async () => {
+  describe("doesDocumentExist", () => {
+    test("successfully identifies an existing document", async () => {
       const bucketName = "test";
-      const blobName = "test.txt";
-      const blobContentLength = 6;
-      const objectContentLength = 6;
+      const documentName = "test.txt";
+      const newDocumentContentLength = 6;
+      const existingDocumentContentLength = 6;
 
       const expected = true;
 
       const mockS3Client = partial<S3Client>({
         send: () =>
           Promise.resolve({
-            ContentLength: objectContentLength,
+            ContentLength: existingDocumentContentLength,
           }),
       });
 
@@ -127,26 +128,26 @@ describe("S3Bucket", () => {
         name: bucketName,
         logger: mockLogger,
       });
-      const actual = await s3Bucket.doesObjectExist(
-        blobName,
-        blobContentLength
+      const actual = await s3Bucket.doesDocumentExist(
+        documentName,
+        newDocumentContentLength
       );
 
       expect(actual).toEqual(expected);
     });
 
-    test("successfully identifies an object with a duplicate name", async () => {
+    test("successfully identifies a document with a duplicate name", async () => {
       const bucketName = "test";
-      const blobName = "test.txt";
-      const blobContentLength = 6;
-      const objectContentLength = 7;
+      const documentName = "test.txt";
+      const newDocumentContentLength = 6;
+      const existingDocumentContentLength = 7;
 
       const expected = false;
 
       const mockS3Client = partial<S3Client>({
         send: () =>
           Promise.resolve({
-            ContentLength: objectContentLength,
+            ContentLength: existingDocumentContentLength,
           }),
       });
 
@@ -160,19 +161,19 @@ describe("S3Bucket", () => {
         name: bucketName,
         logger: mockLogger,
       });
-      const actual = await s3Bucket.doesObjectExist(
-        blobName,
-        blobContentLength
+      const actual = await s3Bucket.doesDocumentExist(
+        documentName,
+        newDocumentContentLength
       );
 
       expect(actual).toEqual(expected);
       expect(mockLoggerInfo).toBeCalled();
     });
 
-    test("successfully identfies a new object", async () => {
+    test("successfully identfies a new document", async () => {
       const bucketName = "test";
-      const blobName = "test.txt";
-      const blobContentLength = 6;
+      const documentName = "test.txt";
+      const documentContentLength = 6;
       const error = new Error("Not found");
       error.name = "NotFound";
 
@@ -189,9 +190,9 @@ describe("S3Bucket", () => {
         name: bucketName,
         logger: mockLogger,
       });
-      const actual = await s3Bucket.doesObjectExist(
-        blobName,
-        blobContentLength
+      const actual = await s3Bucket.doesDocumentExist(
+        documentName,
+        documentContentLength
       );
 
       expect(actual).toEqual(expected);
@@ -199,8 +200,8 @@ describe("S3Bucket", () => {
 
     test("successfully handles a failure", async () => {
       const bucketName = "test";
-      const blobName = "test.txt";
-      const blobContentLength = 6;
+      const documentName = "test.txt";
+      const documentContentLength = 6;
       const error = new Error("Test Error");
 
       const expected = false;
@@ -219,9 +220,9 @@ describe("S3Bucket", () => {
         name: bucketName,
         logger: mockLogger,
       });
-      const actual = await s3Bucket.doesObjectExist(
-        blobName,
-        blobContentLength
+      const actual = await s3Bucket.doesDocumentExist(
+        documentName,
+        documentContentLength
       );
 
       expect(actual).toEqual(expected);
@@ -229,12 +230,12 @@ describe("S3Bucket", () => {
     });
   });
 
-  describe("putObjectStream", () => {
-    test("successfully uploads an object", async () => {
+  describe("putDocumentContent", () => {
+    test("successfully uploads a document", async () => {
       const bucketName = "test";
-      const objectName = "test.txt";
-      const blobContentType = "text/plain";
-      const blobStream = partial<ReadableStream>({});
+      const documentName = "test.txt";
+      const documentContentType = "text/plain";
+      const documentStream = partial<ReadableStream>({});
 
       const mockS3Client = partial<S3Client>({});
 
@@ -242,9 +243,9 @@ describe("S3Bucket", () => {
         client: mockS3Client,
         params: {
           Bucket: bucketName,
-          Key: objectName,
-          ContentType: blobContentType,
-          Body: blobStream,
+          Key: documentName,
+          ContentType: documentContentType,
+          Body: documentStream,
         },
       };
 
@@ -255,7 +256,11 @@ describe("S3Bucket", () => {
         name: bucketName,
         logger: mockLogger,
       });
-      await s3Bucket.putObjectStream(objectName, blobContentType, blobStream);
+      await s3Bucket.putDocumentContent(
+        documentName,
+        documentContentType,
+        documentStream
+      );
 
       expect(mockLibStorage.Upload).toBeCalledWith(expected);
       expect(mockLibStorage.Upload.mock.instances[0].done).toBeCalled();

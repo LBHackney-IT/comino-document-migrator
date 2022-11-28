@@ -10,16 +10,12 @@ import {
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { Logger } from "./log";
-
-export interface BlobMetadata {
-  name: string;
-  contentLength?: number;
-}
-
-export interface BlobContent {
-  body?: ReadableStream;
-  contentType?: string;
-}
+import {
+  DocumentSource,
+  DocumentDestination,
+  DocumentMetadata,
+  DocumentContent,
+} from "./migration";
 
 export interface BlobContainerConfig {
   blobClient: BlobClient;
@@ -28,7 +24,7 @@ export interface BlobContainerConfig {
   pageSize?: number;
 }
 
-export class BlobContainer {
+export class BlobContainer implements DocumentSource {
   private client: ContainerClient;
   private prefix: string;
   private pageSize: number;
@@ -44,7 +40,7 @@ export class BlobContainer {
     this.pageSize = pageSize;
   }
 
-  async *listBlobs(): AsyncIterable<BlobMetadata> {
+  async *listDocuments(): AsyncIterable<DocumentMetadata> {
     const pages = this.client
       .listBlobsFlat({ prefix: this.prefix })
       .byPage({ maxPageSize: this.pageSize });
@@ -56,7 +52,7 @@ export class BlobContainer {
     }
   }
 
-  async getBlobContent(name: string): Promise<BlobContent> {
+  async getDocumentContent(name: string): Promise<DocumentContent> {
     const blobItemClient = this.client.getBlobClient(name);
     const blobDownloadResponse = await blobItemClient.download();
 
@@ -74,7 +70,7 @@ export interface S3BucketConfig {
   logger: Logger;
 }
 
-export class S3Bucket {
+export class S3Bucket implements DocumentDestination {
   private client: S3Client;
   private name: string;
   private prefix: string;
@@ -87,7 +83,7 @@ export class S3Bucket {
     this.logger = logger;
   }
 
-  async doesObjectExist(
+  async doesDocumentExist(
     name: string,
     contentLength?: number
   ): Promise<boolean> {
@@ -122,7 +118,7 @@ export class S3Bucket {
     return true;
   }
 
-  async putObjectStream(
+  async putDocumentContent(
     name: string,
     contentType?: string,
     stream?: ReadableStream
