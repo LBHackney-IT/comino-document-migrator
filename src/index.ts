@@ -4,7 +4,7 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { config } from "./config";
 import { createLogger } from "./log";
 import { BlobContainer, S3Bucket } from "./storage";
-import { createMigration } from "./migration";
+import { createDocumentMigration } from "./migration";
 
 const logger = createLogger(config.service, config.log.level);
 const blobUrl = `${config.azure.blob.url}?${config.azure.blob.sasToken}`;
@@ -24,10 +24,10 @@ const s3Bucket = new S3Bucket({
   prefix: config.aws.s3.prefix,
   logger,
 });
-const runMigration = createMigration({
-  blobContainer,
-  s3Bucket,
-  s3ObjectNameMapper: path.basename,
+const runMigration = createDocumentMigration({
+  documentSource: blobContainer,
+  documentDestination: s3Bucket,
+  documentNameMap: path.basename,
   maxConcurrentDocuments: config.migration.maxConcurrentDocuments,
   maxRetriesPerDocument: config.migration.maxRetriesPerDocument,
 });

@@ -1,10 +1,13 @@
 import { partial } from "./helpers";
-import { BlobContainer, S3Bucket } from "../src/storage";
-import { createMigration } from "../src/migration";
+import {
+  createDocumentMigration,
+  DocumentSource,
+  DocumentDestination,
+} from "../src/migration";
 
-describe("createMigration", () => {
-  test("successfully creates a migration that only copies new files", async () => {
-    const blobs = [
+describe("createDocumentMigration", () => {
+  test("successfully creates a migration that only copies new documents", async () => {
+    const documents = [
       {
         name: "1.txt",
         contentLength: 1,
@@ -37,50 +40,56 @@ describe("createMigration", () => {
       },
     ];
 
-    const expected = blobs
-      .filter((blob) => !blob.exists)
+    const expected = documents
+      .filter((document) => !document.exists)
       .map(({ name, contentType }) => [
         name,
         contentType,
         partial<ReadableStream>({}),
       ]);
 
-    const mockBlobContainerGetBlobContent = jest.fn();
-    blobs.forEach(({ contentType }) =>
-      mockBlobContainerGetBlobContent.mockResolvedValueOnce({
+    const mockDocumentSourceGetDocumentContent = jest.fn();
+    documents.forEach(({ contentType }) =>
+      mockDocumentSourceGetDocumentContent.mockResolvedValueOnce({
         contentType,
         body: partial<ReadableStream>({}),
       })
     );
-    const mockBlobContainer = partial<BlobContainer>({
-      listBlobs: async function* () {
-        for (const { name, contentLength } of blobs) {
+    const mockDocumentSource = partial<DocumentSource>({
+      listDocuments: async function* () {
+        for (const { name, contentLength } of documents) {
           yield { name, contentLength };
         }
       },
-      getBlobContent: mockBlobContainerGetBlobContent,
+      getDocumentContent: mockDocumentSourceGetDocumentContent,
     });
 
-    const mockS3BucketDoesObjectExist = jest.fn();
-    blobs.forEach((blob) =>
-      mockS3BucketDoesObjectExist.mockResolvedValueOnce(blob.exists)
+    const mockDocumentDestinationDoesDocumentExist = jest.fn();
+    documents.forEach((document) =>
+      mockDocumentDestinationDoesDocumentExist.mockResolvedValueOnce(
+        document.exists
+      )
     );
-    const mockS3BucketPutObjectStream = jest.fn(() => Promise.resolve());
-    const mockS3Bucket = partial<S3Bucket>({
-      doesObjectExist: mockS3BucketDoesObjectExist,
-      putObjectStream: mockS3BucketPutObjectStream,
+    const mockDocumentDestinationPutDocumentContent = jest.fn(() =>
+      Promise.resolve()
+    );
+    const mockDocumentDestination = partial<DocumentDestination>({
+      doesDocumentExist: mockDocumentDestinationDoesDocumentExist,
+      putDocumentContent: mockDocumentDestinationPutDocumentContent,
     });
 
-    const mockS3ObjectNameMapper = (name: string) => name;
+    const mockDocumentNameMapper = (name: string) => name;
 
-    const runMigration = createMigration({
-      blobContainer: mockBlobContainer,
-      s3Bucket: mockS3Bucket,
-      s3ObjectNameMapper: mockS3ObjectNameMapper,
+    const runMigration = createDocumentMigration({
+      documentSource: mockDocumentSource,
+      documentDestination: mockDocumentDestination,
+      documentNameMap: mockDocumentNameMapper,
     });
 
     await runMigration();
 
-    expect(mockS3BucketPutObjectStream.mock.calls).toEqual(expected);
+    expect(mockDocumentDestinationPutDocumentContent.mock.calls).toEqual(
+      expected
+    );
   });
 });

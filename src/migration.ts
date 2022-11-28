@@ -1,48 +1,71 @@
 import retry from "async-retry";
-import { BlobContainer, S3Bucket } from "./storage";
+
+export interface DocumentMetadata {
+  name: string;
+  contentLength?: number;
+}
+
+export interface DocumentContent {
+  body?: ReadableStream;
+  contentType?: string;
+}
+
+export interface DocumentSource {
+  listDocuments(): AsyncIterable<DocumentMetadata>;
+  getDocumentContent(name: string): Promise<DocumentContent>;
+}
+
+export interface DocumentDestination {
+  doesDocumentExist(name: string, contentLength: number): Promise<boolean>;
+  putDocumentContent(
+    name: string,
+    contentType?: string,
+    body?: ReadableStream
+  ): Promise<void>;
+}
 
 export interface MigrationConfig {
-  blobContainer: BlobContainer;
-  s3Bucket: S3Bucket;
-  s3ObjectNameMapper: (blobName: string) => string;
+  documentSource: DocumentSource;
+  documentDestination: DocumentDestination;
+  documentNameMap: (blobName: string) => string;
   maxConcurrentDocuments?: number;
   maxRetriesPerDocument?: number;
 }
 
-export const createMigration =
+export const createDocumentMigration =
   ({
-    blobContainer,
-    s3Bucket,
-    s3ObjectNameMapper: mapS3ObjectName,
+    documentSource,
+    documentDestination,
+    documentNameMap: mapDocumentName,
     maxConcurrentDocuments = 32,
     maxRetriesPerDocument = 10,
   }: MigrationConfig) =>
   async () => {
-    const blobMetadataList = blobContainer.listBlobs();
+    const srcDocMetadataList = documentSource.listDocuments();
 
     const workers = new Array(maxConcurrentDocuments)
-      .fill(blobMetadataList)
-      .map(async (blobMetadataList) => {
-        for await (const blobMetadata of blobMetadataList) {
-          const s3ObjectName = mapS3ObjectName(blobMetadata.name);
+      .fill(srcDocMetadataList)
+      .map(async (srcDocMetadataList) => {
+        for await (const srcDocMetadata of srcDocMetadataList) {
+          const destDocName = mapDocumentName(srcDocMetadata.name);
 
-          const objectExists = await s3Bucket.doesObjectExist(
-            s3ObjectName,
-            blobMetadata.contentLength
+          const destDocExists = await documentDestination.doesDocumentExist(
+            destDocName,
+            srcDocMetadata.contentLength
           );
-          if (objectExists) {
+          if (destDocExists) {
             continue;
           }
 
           await retry(
             async () => {
-              const content = await blobContainer.getBlobContent(
-                blobMetadata.name
+              const srcDocContent = await documentSource.getDocumentContent(
+                srcDocMetadata.name
               );
-              await s3Bucket.putObjectStream(
-                s3ObjectName,
-                content.contentType,
-                content.body
+              await documentDestination.putDocumentContent(
+                destDocName,
+                srcDocContent.contentType,
+                srcDocContent.body
               );
             },
             { retries: maxRetriesPerDocument }
