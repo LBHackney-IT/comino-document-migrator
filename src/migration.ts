@@ -27,7 +27,7 @@ export interface DocumentDestination {
 export interface MigrationConfig {
   documentSource: DocumentSource;
   documentDestination: DocumentDestination;
-  documentNameMap: (blobName: string) => string;
+  documentNameMap: (name: string) => string;
   maxConcurrentDocuments?: number;
   maxRetriesPerDocument?: number;
 }
