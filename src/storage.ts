@@ -47,13 +47,18 @@ export class BlobContainer implements DocumentSource {
 
     for await (const page of pages) {
       for (const item of page.segment.blobItems) {
-        yield { name: item.name, contentLength: item.properties.contentLength };
+        yield {
+          name: item.name.substring(this.prefix.length),
+          contentLength: item.properties.contentLength,
+        };
       }
     }
   }
 
   async getDocumentContent(name: string): Promise<DocumentContent> {
-    const blobItemClient = this.client.getBlobClient(name);
+    const blobItemClient = this.client.getBlobClient(
+      path.join(this.prefix, name)
+    );
     const blobDownloadResponse = await blobItemClient.download();
 
     return {
