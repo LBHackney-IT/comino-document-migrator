@@ -78,12 +78,12 @@ describe("createDocumentMigration", () => {
       putDocumentContent: mockDocumentDestinationPutDocumentContent,
     });
 
-    const mockDocumentNameMapper = (name: string) => name;
+    const mockDocumentNameMap = (name: string) => name;
 
     const runMigration = createDocumentMigration({
       documentSource: mockDocumentSource,
       documentDestination: mockDocumentDestination,
-      documentNameMap: mockDocumentNameMapper,
+      documentNameMap: mockDocumentNameMap,
     });
 
     await runMigration();
