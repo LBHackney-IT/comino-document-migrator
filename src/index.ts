@@ -30,8 +30,7 @@ const runMigration = createDocumentMigration({
   documentNameMap: path.basename,
   maxConcurrentDocuments: config.migration.maxConcurrentDocuments,
   maxRetriesPerDocument: config.migration.maxRetriesPerDocument,
+  logger,
 });
 
-runMigration()
-  .then(() => logger.info("Migration finished"))
-  .catch((err) => logger.error(err));
+runMigration().catch((err) => logger.error(err));

@@ -1,4 +1,5 @@
 import { partial } from "./helpers";
+import { Logger } from "../src/log";
 import {
   createDocumentMigration,
   DocumentSource,
@@ -80,10 +81,16 @@ describe("createDocumentMigration", () => {
 
     const mockDocumentNameMap = (name: string) => name;
 
+    const mockLoggerInfo = jest.fn();
+    const mockLogger = partial<Logger>({
+      info: mockLoggerInfo,
+    });
+
     const runMigration = createDocumentMigration({
       documentSource: mockDocumentSource,
       documentDestination: mockDocumentDestination,
       documentNameMap: mockDocumentNameMap,
+      logger: mockLogger,
     });
 
     await runMigration();
