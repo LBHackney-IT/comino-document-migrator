@@ -22,28 +22,42 @@ export interface BlobContainerConfig {
   name: string;
   prefix?: string;
   pageSize?: number;
+  checkpointPageInterval?: number;
+  checkpointToken?: string;
+  logger: Logger;
 }
 
 export class BlobContainer implements DocumentSource {
   private client: ContainerClient;
   private prefix: string;
   private pageSize: number;
+  private checkpointPageInterval: number;
+  private checkpointToken?: string;
+  private logger: Logger;
 
   constructor({
     blobClient,
     name,
     prefix = "",
     pageSize = 100,
+    checkpointPageInterval = 1000,
+    checkpointToken,
+    logger,
   }: BlobContainerConfig) {
     this.client = blobClient.getContainerClient(name);
     this.prefix = prefix;
     this.pageSize = pageSize;
+    this.checkpointPageInterval = checkpointPageInterval;
+    this.checkpointToken = checkpointToken;
+    this.logger = logger;
   }
 
   async *listDocuments(): AsyncIterable<DocumentMetadata> {
-    const pages = this.client
-      .listBlobsFlat({ prefix: this.prefix })
-      .byPage({ maxPageSize: this.pageSize });
+    const pages = this.client.listBlobsFlat({ prefix: this.prefix }).byPage({
+      maxPageSize: this.pageSize,
+      continuationToken: this.checkpointToken,
+    });
+    let pageCount = 0;
 
     for await (const page of pages) {
       for (const item of page.segment.blobItems) {
@@ -51,6 +65,15 @@ export class BlobContainer implements DocumentSource {
           name: item.name.substring(this.prefix.length),
           contentLength: item.properties.contentLength,
         };
+      }
+
+      if (
+        ++pageCount % this.checkpointPageInterval === 0 &&
+        page.continuationToken
+      ) {
+        this.logger.info("Checkpoint reached", {
+          continuationToken: page.continuationToken,
+        });
       }
     }
   }

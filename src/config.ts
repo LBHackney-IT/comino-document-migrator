@@ -40,6 +40,16 @@ export const config = convict({
         format: Number,
         default: 100,
       },
+      checkpointPageInterval: {
+        env: "AZURE_BLOB_CHECKPOINT_PAGE_INTERVAL",
+        format: Number,
+        default: 1000,
+      },
+      checkpointToken: {
+        env: "AZURE_BLOB_CHECKPOINT_TOKEN",
+        format: String,
+        default: undefined,
+      },
     },
   },
   aws: {

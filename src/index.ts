@@ -17,6 +17,9 @@ const blobContainer = new BlobContainer({
   name: config.azure.blob.containerName,
   prefix: config.azure.blob.prefix,
   pageSize: config.azure.blob.pageSize,
+  checkpointPageInterval: config.azure.blob.checkpointPageInterval,
+  checkpointToken: config.azure.blob.checkpointToken,
+  logger,
 });
 const s3Bucket = new S3Bucket({
   s3Client,
