@@ -18,6 +18,7 @@ describe("BlobContainer", () => {
     test("successfully lists documents", async () => {
       const containerName = "test";
       const pageSize = 2;
+      const checkpointPageInterval = 2;
       const pages = [
         [
           { name: "1.txt", properties: { contentLength: 1 } },
@@ -45,18 +46,28 @@ describe("BlobContainer", () => {
         getContainerClient: () => ({
           listBlobsFlat: () => ({
             byPage: async function* () {
-              for (const page of pages) {
-                yield { segment: { blobItems: page } };
+              for (const [idx, page] of pages.entries()) {
+                yield {
+                  segment: { blobItems: page },
+                  continuationToken: `test-${idx}`,
+                };
               }
             },
           }),
         }),
       });
 
+      const mockLoggerInfo = jest.fn();
+      const mockLogger = partial<Logger>({
+        info: mockLoggerInfo,
+      });
+
       const blobContainer = new BlobContainer({
         blobClient: mockBlobClient,
         name: containerName,
         pageSize,
+        checkpointPageInterval,
+        logger: mockLogger,
       });
       const documentMetadataList = blobContainer.listDocuments();
 
@@ -66,6 +77,7 @@ describe("BlobContainer", () => {
       }
 
       expect(actual).toEqual(expected);
+      expect(mockLoggerInfo).toBeCalledTimes(1);
     });
   });
 
@@ -93,9 +105,12 @@ describe("BlobContainer", () => {
         }),
       });
 
+      const mockLogger = partial<Logger>({});
+
       const blobContainer = new BlobContainer({
         blobClient: mockBlobClient,
         name: containerName,
+        logger: mockLogger,
       });
       const actual = await blobContainer.getDocumentContent(documentName);
 

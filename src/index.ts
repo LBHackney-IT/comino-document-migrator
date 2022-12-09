@@ -17,6 +17,9 @@ const blobContainer = new BlobContainer({
   name: config.azure.blob.containerName,
   prefix: config.azure.blob.prefix,
   pageSize: config.azure.blob.pageSize,
+  checkpointPageInterval: config.azure.blob.checkpointPageInterval,
+  checkpointToken: config.azure.blob.checkpointToken,
+  logger,
 });
 const s3Bucket = new S3Bucket({
   s3Client,
@@ -30,8 +33,7 @@ const runMigration = createDocumentMigration({
   documentNameMap: path.basename,
   maxConcurrentDocuments: config.migration.maxConcurrentDocuments,
   maxRetriesPerDocument: config.migration.maxRetriesPerDocument,
+  logger,
 });
 
-runMigration()
-  .then(() => logger.info("Migration finished"))
-  .catch((err) => logger.error(err));
+runMigration().catch((err) => logger.error(err));

@@ -16,6 +16,15 @@ const errorStackFormat = winston.format((info) => {
       message: info.message,
     };
   }
+
+  if (info.message instanceof Error) {
+    return {
+      ...info,
+      ...info.message,
+      stack: info.message.stack,
+    };
+  }
+
   return info;
 });
 
