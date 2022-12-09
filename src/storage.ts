@@ -58,9 +58,12 @@ export class BlobContainer implements DocumentSource {
       continuationToken: this.checkpointToken,
     });
     let pageCount = 0;
+    let documentCount = 0;
 
     for await (const page of pages) {
       for (const item of page.segment.blobItems) {
+        documentCount++;
+
         yield {
           name: item.name.substring(this.prefix.length),
           contentLength: item.properties.contentLength,
@@ -72,6 +75,8 @@ export class BlobContainer implements DocumentSource {
         page.continuationToken
       ) {
         this.logger.info("Checkpoint reached", {
+          pageCount: pageCount,
+          documentCount: documentCount,
           continuationToken: page.continuationToken,
         });
       }
