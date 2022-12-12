@@ -1,4 +1,3 @@
-import path from "path";
 import {
   BlobServiceClient as BlobClient,
   ContainerClient,
@@ -84,9 +83,9 @@ export class BlobContainer implements DocumentSource {
   }
 
   async getDocumentContent(name: string): Promise<DocumentContent> {
-    const blobItemClient = this.client.getBlobClient(
-      path.join(this.prefix, name)
-    );
+    const fullName = `${this.prefix}${name}`;
+
+    const blobItemClient = this.client.getBlobClient(fullName);
     const blobDownloadResponse = await blobItemClient.download();
 
     return {
@@ -170,6 +169,6 @@ export class S3Bucket implements DocumentDestination {
   }
 
   private mapObjectName(name: string): string {
-    return path.join(this.prefix, name);
+    return `${this.prefix}${name}`;
   }
 }
